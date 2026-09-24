@@ -20,10 +20,30 @@ Design sheet (logo, notifications, widgets): https://albertinathesis-lang.github
 On iPhone: open the link in Safari, Share → Add to Home Screen. It then opens
 full-screen like an app, and notifications can be allowed from Settings.
 
-Reminders fire while Tally is open (or in the background where the platform
-allows). Delivery while the app is closed needs a push server, which Tally
-does not have; Home Screen widgets need a native shell. Both are drawn on the
-design sheet as the target.
+## Reminders while the app is closed (push server)
+
+Settings → Notifications → Allow, then "While Tally is closed → Turn on". The
+phone subscribes to Web Push and keeps its reminder list on a small Supabase
+project (`tally`, ref lodogasuaggsibycwqyi, eu-central-1, free tier):
+
+- `push_subscriptions` — one row per phone: endpoint + keys, timezone, the
+  reminders (habit id, name, body, time, weekdays), what is done today, what
+  was sent today. Nothing else leaves the phone. RLS on, no policies: only
+  the edge functions (service role) touch it.
+- `push_config` — VAPID keys, subject, and the cron secret.
+- `server/push-sync` — the phone upserts / deletes its row; `{test:true}` asks
+  for a test push right away.
+- `server/push-tick` — pg_cron calls it every minute with the secret; it works
+  out the local minute per timezone and sends what is due via `web-push`.
+  Subscriptions that are gone (404/410) are deleted.
+
+The VAPID key pair and the cron secret live in `~/.config/tally/vapid.json`
+(not in the repo). The public key, project URL and publishable key are in
+app.js (`PUSH`). Rotate: new keys in `push_config`, new public key in app.js,
+phones re-subscribe from Settings.
+
+Home Screen widgets still need a native shell; they are on the design sheet
+as the target.
 
 Files: index.html (shell), tokens.css (design tokens, from the
 apple-design-skill), app.css, app.js (everything), icons.js (Lucide line

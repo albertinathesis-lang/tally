@@ -30,7 +30,7 @@
     s.habits.forEach(h => { if (!I[h.icon]) h.icon = EMOJI_MAP[h.icon] || 'circle-check'; });   // v1 emoji -> line icon
     return s;
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} if (typeof syncPush === 'function') syncPush(); }
   const uid = () => Math.random().toString(36).slice(2, 10);
 
   // ---------- dates ----------
@@ -201,7 +201,7 @@
     const row = (act, label, small, cls = '') => `<button class="row ${cls}" data-act="${act}"><span>${label}</span><small>${small || ''}</small>${ic('chevron-right', 18, 'chev')}</button>`;
     return `<div class="lt-row"><h1 class="lt">Settings</h1></div>
       <div class="eyebrow"><span>Data</span></div><div class="panel list">${row('export', 'Export', 'JSON file')}${row('import', 'Import', 'Replaces everything')}</div>
-      <div class="eyebrow"><span>Reminders</span></div><div class="panel list">${notifRow()}${notifState() === 'granted' ? row('notif-test', 'Send a test reminder', '') : ''}</div>
+      <div class="eyebrow"><span>Reminders</span></div><div class="panel list">${notifRow()}${notifState() === 'granted' ? row('notif-test', 'Send a test reminder', state.push ? 'via server' : '') : ''}${state.push ? row('push-off', 'Turn off reminders while closed', '') : ''}</div>
       <p class="note">${notifNote()}</p>
       <div class="eyebrow"><span>Habits</span></div><div class="panel list">${row('archived', 'Archived', a)}</div>
       <div class="panel list" style="margin-top:22px">${row('wipe', 'Delete all data', '', 'danger')}</div>
@@ -279,6 +279,45 @@
   function stopTimer() { if (tick) clearInterval(tick); tick = null; if (timer) timer.running = false; }
   function commitTimer() { if (!timer) return; setValue(timer.h, timer.k, Math.round(timer.base + timer.secs / 60)); }
 
+  // ---------- push (reminders while the app is closed) ----------
+  // The phone subscribes to Web Push and keeps its reminder list on the
+  // server (a Supabase project: one row per subscription, holding only
+  // the reminders, the timezone and what is done today). A job there runs
+  // every minute and pushes whatever is due. Nothing else leaves the phone.
+  const PUSH = { url: 'https://lodogasuaggsibycwqyi.supabase.co', key: 'sb_publishable_PyPIDVs6quS3Qlv-hXqrHQ_hx53bZgN', vapid: 'BFThnWY2_-TOy3R00UIPO2Tk9X6GhmWp-G05YSaEjktanUIpA0KHWWapbf-Kva0xvDNmlo1oF0pMgxBvpIO1IL8' };
+  const pushReady = () => PUSH.url.startsWith('https://') && 'PushManager' in window && 'serviceWorker' in navigator;
+  function b64ToU8(b) { const s = atob((b + '='.repeat((4 - b.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(s, c => c.charCodeAt(0)); }
+  function reminderList() {
+    return state.habits.filter(h => !h.archived && h.reminder).map(h => ({ id: h.id, name: h.name, time: h.reminder, days: h.days,
+      body: h.type === 'count' ? `${target(h)}${h.unit ? ' ' + h.unit : ''} today` : h.type === 'timer' ? `${target(h)} minutes today` : 'Time for it.' }));
+  }
+  function doneToday() { const t = today(); return { date: t, ids: state.habits.filter(h => done(h, t)).map(h => h.id) }; }
+  async function pushCall(method, body) {
+    const r = await fetch(PUSH.url + '/functions/v1/push-sync', { method, headers: { 'Content-Type': 'application/json', 'apikey': PUSH.key, 'Authorization': 'Bearer ' + PUSH.key }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error('push-sync ' + r.status);
+    return r.json();
+  }
+  let syncTimer = null;
+  function syncPush(extra) {
+    if (!state.push || !pushReady()) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      pushCall('POST', Object.assign({ endpoint: state.push.endpoint, keys: state.push.keys, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, reminders: reminderList(), done: doneToday() }, extra || {})).catch(() => {});
+    }, extra ? 0 : 800);
+  }
+  async function subscribePush() {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(PUSH.vapid) });
+    const j = sub.toJSON();
+    state.push = { endpoint: j.endpoint, keys: j.keys }; save();
+    await pushCall('POST', { endpoint: j.endpoint, keys: j.keys, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, reminders: reminderList(), done: doneToday() });
+  }
+  async function unsubscribePush() {
+    try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) { await pushCall('DELETE', { endpoint: sub.endpoint }); await sub.unsubscribe(); } } catch (e) {}
+    delete state.push; save(); render();
+  }
+
   // ---------- reminders ----------
   // A habit can carry a time. While Tally is open (or in the background on
   // platforms that keep web apps alive), the minute comes round and a
@@ -291,17 +330,25 @@
     const st = notifState();
     const label = { granted: 'Allowed', denied: 'Blocked in Settings', default: 'Off', unsupported: 'Not available here' }[st];
     if (st === 'default') return `<button class="row" data-act="notif"><span>Notifications</span><small style="color:var(--accent)">Allow</small></button>`;
-    return `<div class="row"><span>Notifications</span><small>${label}</small></div>`;
+    let rows = `<div class="row"><span>Notifications</span><small>${label}</small></div>`;
+    if (st === 'granted' && pushReady()) rows += state.push
+      ? `<div class="row"><span>While Tally is closed</span><small>On</small></div>`
+      : `<button class="row" data-act="push-on"><span>While Tally is closed</span><small style="color:var(--accent)">Turn on</small></button>`;
+    return rows;
   }
   function notifNote() {
     const st = notifState();
     if (st === 'unsupported' && isIOS() && !standalone()) return 'On iPhone, notifications work once Tally is on the Home Screen: open this page in Safari, tap Share, then Add to Home Screen.';
     if (st === 'denied') return 'Notifications are blocked for Tally. Turn them on in the phone\'s Settings, under Notifications.';
-    return 'Set a time on any habit and a reminder arrives at that minute while Tally is open. Reminders while the app is closed need a push server, which Tally does not have yet.';
+    if (state.push) return 'Set a time on any habit and the reminder arrives at that minute, whether Tally is open or not. The server holds only your reminder times, your timezone and what is done today.';
+    return 'Set a time on any habit and a reminder arrives at that minute while Tally is open. Turn on "While Tally is closed" to have them delivered any time.';
   }
   function askNotifications() {
     if (!('Notification' in window)) return;
-    Notification.requestPermission().then(() => render());
+    Notification.requestPermission().then(async p => {
+      if (p === 'granted' && pushReady()) { try { await subscribePush(); } catch (e) { console.warn('push subscribe failed', e); } }
+      render();
+    });
   }
   function notify(h, body) {
     if (notifState() !== 'granted') return;
@@ -309,6 +356,7 @@
     navigator.serviceWorker.ready.then(r => r.showNotification(h.name, opts)).catch(() => { try { new Notification(h.name, opts); } catch (e) {} });
   }
   function checkReminders() {
+    if (state.push) return;                       // the server delivers
     const t = today(), now = new Date(), hm = pad(now.getHours()) + ':' + pad(now.getMinutes());
     state.notified = state.notified && state.notified.date === t ? state.notified : { date: t, ids: [] };
     let changed = false;
@@ -335,7 +383,9 @@
       case 'close': closeSheet(); break;
       case 'clear-r': readDraft(); draft.reminder = ''; renderEditSheet(false); break;
       case 'notif': askNotifications(); break;
-      case 'notif-test': notify({ name: 'Tally', id: 'test' }, 'This is what a reminder looks like.'); break;
+      case 'notif-test': if (state.push) syncPush({ test: true }); else notify({ name: 'Tally', id: 'test' }, 'This is what a reminder looks like.'); break;
+      case 'push-on': subscribePush().then(render).catch(e => { console.warn(e); alert('Could not turn on reminders. Is Tally on the Home Screen?'); }); break;
+      case 'push-off': unsubscribePush(); break;
       case 'pick': selected = el.dataset.k; render(); break;
       case 'toggle': setValue(h, selected, done(h, selected) ? 0 : 1); render(); break;
       case 'inc': setValue(h, selected, value(h, selected) + 1); render(); break;
