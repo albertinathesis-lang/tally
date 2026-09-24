@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0b0b12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tally">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<title>Tally</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app" class="app" aria-live="polite"></div>
+<nav class="tabbar" aria-label="Sections">
+  <button class="tab is-on" data-view="today"><span class="tab__i">◎</span>Today</button>
+  <button class="tab" data-view="stats"><span class="tab__i">▥</span>Stats</button>
+  <button class="tab" data-view="awards"><span class="tab__i">⬢</span>Awards</button>
+  <button class="tab" data-view="settings"><span class="tab__i">⚙</span>Settings</button>
+</nav>
+<div id="sheet" class="sheet" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
