@@ -1,6 +1,6 @@
 /* Tally service worker — the app works with no network at all. */
-const CACHE = 'tally-v1';
-const FILES = ['./', './index.html', './app.css', './app.js', './manifest.webmanifest',
+const CACHE = 'tally-v2';
+const FILES = ['./', './index.html', './tokens.css', './app.css', './app.js', './icons.js', './manifest.webmanifest',
   './icons/icon-32.png', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
@@ -14,4 +14,10 @@ self.addEventListener('fetch', e => {
     fetch(e.request).then(r => { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return r; })
       .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
   );
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    const c = list.find(w => 'focus' in w); return c ? c.focus() : self.clients.openWindow('./');
+  }));
 });

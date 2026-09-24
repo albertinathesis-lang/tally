@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tally — design</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="app.css">
+<style>
+/* Design sheet: logo, notifications, widgets. Device frame per the Apple
+   Liquid Glass skill (app.md) — exact iPhone spec, never eyeballed. */
+body { background: #d9d9de; padding: 40px 22px 80px; }
+.ds { max-width: 1080px; margin: 0 auto; }
+.ds h1 { font-size: clamp(27px,5vw,46px); font-weight: 700; letter-spacing: -0.03em; margin: 0 0 6px; }
+.ds .lede { color: var(--text-2); font-size: 16px; margin: 0 0 40px; max-width: 560px; line-height: 1.6; }
+.ds h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin: 56px 0 16px; }
+.ds p { color: var(--text-2); font-size: 14px; line-height: 1.6; max-width: 640px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, 417px); gap: 40px; align-items: start; justify-content: start; }
+.ios { position: relative; width: 393px; height: 852px; background: #000; border-radius: 55px; padding: 12px; box-shadow: 0 50px 100px rgba(0,0,0,.5); margin: 0 auto; transform-origin: top left; }
+.ios-screen { position: relative; width: 100%; height: 100%; background: var(--bg); border-radius: 44px; overflow: hidden; display: flex; flex-direction: column; }
+.ios-island { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 125px; height: 37px; background: #000; border-radius: 999px; z-index: 60; }
+.ios-status { flex: none; height: 59px; display: flex; align-items: center; justify-content: space-between; padding: 0 32px; font-size: 15px; font-weight: 600; color: var(--text); }
+.ios-status .i { display: flex; align-items: center; gap: 5px; font-size: 13px; }
+.ios-home { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 139px; height: 5px; border-radius: 999px; background: rgba(0,0,0,.85); z-index: 80; }
+.ios.dark .ios-status, .ios.dark .lock-time { color: #fff; } .ios.dark .ios-home { background: rgba(255,255,255,.9); }
+.lock { background: radial-gradient(120% 90% at 50% 0%, #6a7bd8 0%, #1b2246 55%, #0a0d20 100%); }
+.lock-time { text-align: center; color: #fff; margin-top: 40px; }
+.lock-time .d { font-size: 22px; font-weight: 500; }
+.lock-time .t { font-size: 84px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; margin-top: 4px; }
+.notif { margin: 26px 12px 0; padding: 12px 14px; border-radius: 22px; background: rgba(255,255,255,.72); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 2px 8px rgba(0,0,0,.1), 0 30px 80px rgba(0,0,0,.24); }
+.notif img { width: 38px; height: 38px; border-radius: 9px; flex: none; }
+.notif .h { display: flex; justify-content: space-between; font-size: 13px; }
+.notif .h b { font-weight: 600; } .notif .h span { color: var(--text-3); }
+.notif .b { font-size: 15px; color: var(--text); margin-top: 1px; }
+.notif .m { font-size: 13px; color: var(--text-2); margin-top: 1px; }
+.notif .acts { display: flex; gap: 8px; margin-top: 10px; }
+.notif .acts span { flex: 1; text-align: center; padding: 7px 0; border-radius: 999px; background: rgba(0,0,0,.06); font-size: 13px; font-weight: 600; }
+.notif .acts span.p { background: var(--accent); color: #fff; }
+.banner { position: absolute; top: 59px; left: 12px; right: 12px; z-index: 65; }
+.home { background: radial-gradient(120% 90% at 50% 0%, #cfd6ff 0%, #f5f5f7 60%); padding: 0 20px; }
+.wgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 12px; }
+.w { background: var(--surface); border-radius: 22px; box-shadow: var(--sh-card); padding: 14px; overflow: hidden; }
+.w-s { grid-column: span 2; aspect-ratio: 1; }
+.w-m { grid-column: span 4; height: 158px; }
+.w-l { grid-column: span 4; height: 354px; }
+.dock { position: absolute; left: 20px; right: 20px; bottom: 24px; height: 92px; border-radius: 30px; background: rgba(255,255,255,.45); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); display: flex; align-items: center; justify-content: space-around; padding: 0 12px; }
+.dock i { width: 60px; height: 60px; border-radius: 14px; background: rgba(0,0,0,.08); display: block; }
+.dock img { width: 60px; height: 60px; border-radius: 14px; display: block; }
+.w .k { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); display: flex; justify-content: space-between; align-items: center; }
+.w .k img { width: 14px; height: 14px; }
+.w .n { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; margin-top: 4px; }
+.w .s { font-size: 12px; color: var(--text-2); }
+.appicon { width: 60px; height: 60px; border-radius: 14px; margin: 0 auto; display: block; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.apps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 8px; margin-top: 22px; text-align: center; font-size: 11px; color: var(--text); }
+.apps i { display: block; width: 60px; height: 60px; border-radius: 14px; background: rgba(0,0,0,.08); margin: 0 auto 4px; }
+.wrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.wrow + .wrow { border-top: 1px solid var(--hairline); }
+.wrow .row__lead { width: 32px; height: 32px; }
+.wrow .row__t { font-size: 14px; } .wrow .row__m { font-size: 12px; }
+.wrow .chk { width: 32px; height: 32px; } .wrow .chk i { width: 24px; height: 24px; }
+.logo-sheet { background: var(--surface); border-radius: var(--r-panel); box-shadow: var(--sh-panel); padding: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 28px; align-items: center; }
+.logo-sheet .cell { text-align: center; }
+.logo-sheet .cell.dark { background: #000; border-radius: var(--r-card); padding: 24px; color: #fff; }
+.logo-sheet .cap { font-size: 12px; color: var(--text-3); margin-top: 12px; }
+.wordmark { display: inline-flex; align-items: center; gap: 12px; font-size: 34px; font-weight: 700; letter-spacing: -0.03em; }
+.wordmark svg { width: 44px; height: 44px; }
+.marks { display: flex; gap: 22px; justify-content: center; align-items: flex-end; }
+@media (max-width: 440px) { .ios { transform: scale(.85); margin-bottom: -128px; } }
+</style>
+</head>
+<body>
+<div class="ds">
+<h1>Tally — design</h1>
+<p class="lede">Logo, notifications and widgets for the habit app, in the Apple Liquid Glass system: light ground, white panels with hairlines, grayscale with one accent, line icons, glass only where layers overlap.</p>
+
+<h2>Logo</h2>
+<p>Five tally marks: four strokes and the fifth across them. The mark says "counting" without a word, reads at 16 px, and is the same drawing as the app icon: white marks on the accent gradient. No other colour is ever added to it.</p>
+<div class="logo-sheet">
+  <div class="cell"><div class="marks"><img src="logo.svg" width="96" height="96" alt=""><img src="logo.svg" width="44" height="44" alt=""><img src="logo.svg" width="20" height="20" alt=""></div><div class="cap">Mark · 96 / 44 / 20</div></div>
+  <div class="cell"><div class="wordmark"><svg viewBox="0 0 64 64" fill="none" stroke="#1d1d1f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 17v30M27 17v30M37 17v30M47 17v30"/><path d="M11 44L53 20"/></svg>Tally</div><div class="cap">Wordmark · SF Pro 700 · −0.03em</div></div>
+  <div class="cell"><img src="icons/icon-180.png" width="90" height="90" style="border-radius:20px;box-shadow:0 1px 2px rgba(0,0,0,.08)" alt=""><div class="cap">App icon · accent gradient</div></div>
+  <div class="cell dark"><svg viewBox="0 0 64 64" width="72" height="72" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 17v30M27 17v30M37 17v30M47 17v30"/><path d="M11 44L53 20"/></svg><div class="cap" style="color:#8e8e93">On dark</div></div>
+</div>
+
+<h2>Notifications</h2>
+<p>One reminder per habit, at the minute chosen in the habit's sheet. The title is the habit, the body is the target, the actions are the two things you'd do: mark it done or push it back. Lock screen on the left, in-app banner on the right. Grayscale with the app icon as the only colour.</p>
+<div class="grid">
+  <div class="ios dark"><div class="ios-screen lock"><div class="ios-island"></div><div class="ios-status"><span class="t"></span><span class="i">5G ▮▮▮</span></div>
+    <div class="lock-time"><div class="d">Friday, September 25</div><div class="t">9:41</div></div>
+    <div class="notif"><img src="icons/icon-180.png" alt=""><div style="flex:1"><div class="h"><b>Meditate</b><span>now</span></div><div class="b">10 minutes today.</div><div class="m">Morning · 4-day streak</div><div class="acts"><span class="p">Done</span><span>In 1 hour</span></div></div></div>
+    <div class="notif" style="margin-top:8px"><img src="icons/icon-180.png" alt=""><div style="flex:1"><div class="h"><b>Drink water</b><span>2h ago</span></div><div class="b">8 glasses today.</div><div class="m">Anytime · 3 of 8 so far</div></div></div>
+    <div class="ios-home"></div></div></div>
+  <div class="ios"><div class="ios-screen"><div class="ios-island"></div><div class="ios-status"><span class="t">9:41</span><span class="i">5G ▮▮▮</span></div>
+    <div class="banner"><div class="notif" style="margin:0"><img src="icons/icon-180.png" alt=""><div style="flex:1"><div class="h"><b>Read</b><span>now</span></div><div class="b">15 minutes today.</div><div class="m">Evening · start the timer</div></div></div></div>
+    <div style="padding:0 16px"><div class="lt-row"><div><h1 class="lt">Today</h1><div class="lt-sub">September 25</div></div></div>
+      <div class="hero"><div><div class="hero__k">Today</div><div class="hero__n">3 of 5 done</div><div class="hero__s">Longest current streak 12 days</div></div><div class="ring" style="position:relative"><svg viewBox="0 0 72 72" width="72" height="72"><circle class="t" cx="36" cy="36" r="32.5" fill="none" stroke-width="7"/><circle class="p" cx="36" cy="36" r="32.5" fill="none" stroke-width="7" stroke-dasharray="204.2" stroke-dashoffset="81.7" transform="rotate(-90 36 36)"/></svg><span class="ring__label">60%</span></div></div>
+      <div class="eyebrow"><span>Evening</span><span>0/1</span></div><div class="panel"><div class="row"><span class="row__lead"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="row__body"><div class="row__t">Read</div><div class="row__m">Every day · 0 of 15 min · 21:00</div></span><span class="chk play"><i>▶</i></span></div></div>
+    </div>
+    <div class="ios-home"></div></div></div>
+</div>
+
+<h2>Widgets</h2>
+<p>Three sizes, all on a white panel. Small: today's ring and count. Medium: the week strip and the next two habits. Large: the day's list, checkable in place. Numbers in tabular figures, one accent, the mark in the corner instead of a title, since the icon already names the app.</p>
+<div class="grid">
+  <div class="ios"><div class="ios-screen home"><div class="ios-island"></div><div class="ios-status"><span class="t">9:41</span><span class="i">5G ▮▮▮</span></div>
+    <div class="wgrid">
+      <div class="w w-s"><div class="k"><span>Today</span><img src="logo.svg" alt=""></div><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100px;position:relative"><svg viewBox="0 0 84 84" width="84" height="84"><circle cx="42" cy="42" r="37" fill="none" stroke="#e8e8ed" stroke-width="8"/><circle cx="42" cy="42" r="37" fill="none" stroke="#0071e3" stroke-width="8" stroke-linecap="round" stroke-dasharray="232.5" stroke-dashoffset="93" transform="rotate(-90 42 42)"/></svg><div style="position:absolute;font-size:22px;font-weight:700;letter-spacing:-0.02em">3<span style="color:#86868b;font-weight:500;font-size:14px">/5</span></div></div><div class="s" style="text-align:center">12-day streak</div></div>
+      <div class="w w-s"><div class="k"><span>Streak</span><img src="logo.svg" alt=""></div><div class="n" style="margin-top:22px">12</div><div class="s">days · Meditate</div><div style="display:flex;gap:4px;margin-top:18px"><i style="flex:1;height:6px;border-radius:3px;background:#0071e3"></i><i style="flex:1;height:6px;border-radius:3px;background:#0071e3"></i><i style="flex:1;height:6px;border-radius:3px;background:#0071e3"></i><i style="flex:1;height:6px;border-radius:3px;background:#0071e3"></i><i style="flex:1;height:6px;border-radius:3px;background:#0071e3"></i><i style="flex:1;height:6px;border-radius:3px;background:#e8e8ed"></i><i style="flex:1;height:6px;border-radius:3px;background:#e8e8ed"></i></div></div>
+      <div class="w w-m"><div class="k"><span>This week</span><img src="logo.svg" alt=""></div>
+        <div class="week" style="margin:10px 0 6px"><span class="day" style="height:auto"><span class="day__n">M</span><span class="day__r"><svg viewBox="0 0 36 36" width="36" height="36"><circle class="t" cx="18" cy="18" r="16.5" fill="none" stroke-width="3"/><circle class="p" cx="18" cy="18" r="16.5" fill="none" stroke-width="3" stroke-dasharray="103.7" stroke-dashoffset="0" transform="rotate(-90 18 18)"/></svg><span>21</span></span></span><span class="day" style="height:auto"><span class="day__n">T</span><span class="day__r"><svg viewBox="0 0 36 36" width="36" height="36"><circle class="t" cx="18" cy="18" r="16.5" fill="none" stroke-width="3"/><circle class="p" cx="18" cy="18" r="16.5" fill="none" stroke-width="3" stroke-dasharray="103.7" stroke-dashoffset="0" transform="rotate(-90 18 18)"/></svg><span>22</span></span></span><span class="day" style="height:auto"><span class="day__n">W</span><span class="day__r"><svg viewBox="0 0 36 36" width="36" height="36"><circle class="t" cx="18" cy="18" r="16.5" fill="none" stroke-width="3"/><circle class="p" cx="18" cy="18" r="16.5" fill="none" stroke-width="3" stroke-dasharray="103.7" stroke-dashoffset="20" transform="rotate(-90 18 18)"/></svg><span>23</span></span></span><span class="day" style="height:auto"><span class="day__n">T</span><span class="day__r"><svg viewBox="0 0 36 36" width="36" height="36"><circle class="t" cx="18" cy="18" r="16.5" fill="none" stroke-width="3"/><circle class="p" cx="18" cy="18" r="16.5" fill="none" stroke-width="3" stroke-dasharray="103.7" stroke-dashoffset="0" transform="rotate(-90 18 18)"/></svg><span>24</span></span></span><span class="day is-sel" style="height:auto"><span class="day__n">F</span><span class="day__r"><svg viewBox="0 0 36 36" width="36" height="36"><circle class="t" cx="18" cy="18" r="16.5" fill="none" stroke-width="3"/><circle class="p" cx="18" cy="18" r="16.5" fill="none" stroke-width="3" stroke-dasharray="103.7" stroke-dashoffset="41" transform="rotate(-90 18 18)"/></svg><span>25</span></span></span><span class="day is-future" style="height:auto"><span class="day__n">S</span><span class="day__r"><svg viewBox="0 0 36 36" width="36" height="36"><circle class="t" cx="18" cy="18" r="16.5" fill="none" stroke-width="3"/></svg><span>26</span></span></span><span class="day is-future" style="height:auto"><span class="day__n">S</span><span class="day__r"><svg viewBox="0 0 36 36" width="36" height="36"><circle class="t" cx="18" cy="18" r="16.5" fill="none" stroke-width="3"/></svg><span>27</span></span></span></div>
+        <div class="s" style="text-align:center">Next: Read · 21:00</div></div>
+      <div class="w w-l"><div class="k"><span>Today · 3 of 5</span><img src="logo.svg" alt=""></div>
+        <div class="wrow row is-done" style="padding:8px 0;min-height:0"><span class="row__lead">✓</span><span class="row__body"><div class="row__t">Meditate</div><div class="row__m">Morning · 12-day streak</div></span><span class="chk on"><i>✓</i></span></div>
+        <div class="wrow row is-done" style="padding:8px 0;min-height:0"><span class="row__lead">✓</span><span class="row__body"><div class="row__t">Walk</div><div class="row__m">Afternoon</div></span><span class="chk on"><i>✓</i></span></div>
+        <div class="wrow row" style="padding:8px 0;min-height:0"><span class="row__lead">5</span><span class="row__body"><div class="row__t">Drink water</div><div class="row__m">5 of 8 glasses</div></span><span class="chk"><i></i></span></div>
+        <div class="wrow row" style="padding:8px 0;min-height:0"><span class="row__lead">0</span><span class="row__body"><div class="row__t">Read</div><div class="row__m">Evening · 15 min · 21:00</div></span><span class="chk"><i></i></span></div>
+        <div class="wrow row" style="padding:8px 0;min-height:0"><span class="row__lead">—</span><span class="row__body"><div class="row__t">No snacks</div><div class="row__m">Anytime</div></span><span class="chk"><i></i></span></div>
+      </div>
+    </div>
+    <div class="dock"><i></i><i></i><i></i><img src="icons/icon-180.png" alt=""></div>
+    <div class="ios-home"></div></div></div>
+</div>
+<p style="margin-top:28px">Widgets and scheduled notifications are drawn here as the target design. A web app on iPhone cannot place a Home Screen widget or fire a notification while closed; both need a native shell or a push server. Reminders inside the app are live today.</p>
+</div>
+</body>
+</html>

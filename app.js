@@ -1,22 +1,34 @@
 /* Tally — a daily habit tracker. One file, no dependencies, data on the
-   device (localStorage) with JSON export/import. */
+   device (localStorage) with JSON export/import. UI follows the Apple
+   Liquid Glass system (tokens.css): unified panels, one accent, line icons. */
 (function () {
   'use strict';
+
+  // ---------- icons ----------
+  const I = window.ICONS || {};
+  const ic = (name, size = 22, extra = '') => `<svg class="ic ${extra}" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[name] || I['circle-check'] || ''}</svg>`;
+  const HABIT_ICONS = ['brain', 'footprints', 'droplet', 'book-open', 'pen-line', 'salad', 'dumbbell', 'bed', 'sparkles', 'palette', 'music', 'languages', 'cigarette-off', 'candy-off', 'smartphone', 'pill', 'shower-head', 'leaf', 'sun', 'moon', 'heart', 'piggy-bank', 'phone', 'dog', 'scale', 'bike', 'coffee', 'apple', 'mic', 'timer', 'flame'];
+  const EMOJI_MAP = { '🧘': 'brain', '🏃': 'footprints', '💧': 'droplet', '📚': 'book-open', '✍️': 'pen-line', '🥗': 'salad', '💪': 'dumbbell', '🛌': 'bed', '🧹': 'sparkles', '🎨': 'palette', '🎸': 'music', '🧠': 'brain', '🚭': 'cigarette-off', '🍬': 'candy-off', '📵': 'smartphone', '💊': 'pill', '🚿': 'shower-head', '🌿': 'leaf', '🧴': 'sun', '🦷': 'sparkles', '💸': 'piggy-bank', '📞': 'phone', '🙏': 'heart', '🐕': 'dog', '⚖️': 'scale', '🔥': 'flame', '🚴': 'bike', '🏊': 'droplet', '☕': 'coffee', '🍎': 'apple', '🗣️': 'mic', '🧩': 'brain' };
+  // progress ring (SVG): r radius, w stroke, p 0..1
+  function ring(size, w, p, cls = '') {
+    const r = (size - w) / 2, c = 2 * Math.PI * r;
+    return `<svg class="${cls}" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true"><circle class="t" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="${w}"/><circle class="p" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="${w}" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${(c * (1 - Math.min(1, p))).toFixed(2)}" transform="rotate(-90 ${size / 2} ${size / 2})"/></svg>`;
+  }
 
   // ---------- data ----------
   const KEY = 'tally.v1';
   const GROUPS = ['Morning', 'Afternoon', 'Evening', 'Anytime'];
-  const GROUP_ICON = { Morning: '🌅', Afternoon: '☀️', Evening: '🌙', Anytime: '✦' };
-  const COLORS = ['#b14cf2', '#2fbfe6', '#2e6bff', '#35c759', '#ff4d4d', '#ff8a3d', '#f5c542', '#ff5fa2', '#7c6cff', '#20c9a6'];
-  const EMOJIS = ['🧘', '🏃', '💧', '📚', '✍️', '🥗', '💪', '🛌', '🧹', '🎨', '🎸', '🧠', '🚭', '🍬', '📵', '💊', '🚿', '🌿', '🧴', '🦷', '💸', '📞', '🙏', '🐕', '⚖️', '🔥', '🚴', '🏊', '☕', '🍎', '🗣️', '🧩'];
   const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const STREAKS = [2, 5, 7, 14, 30, 60, 90, 180, 365];
   const GOALS = [10, 50, 100, 250, 500, 1000];
 
   let state = load();
   function load() {
-    try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.habits) return s; } catch (e) {}
-    return { habits: [], log: {}, order: [] };
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+    if (!s || !s.habits) return { habits: [], log: {} };
+    s.habits.forEach(h => { if (!I[h.icon]) h.icon = EMOJI_MAP[h.icon] || 'circle-check'; });   // v1 emoji -> line icon
+    return s;
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
   const uid = () => Math.random().toString(36).slice(2, 10);
@@ -27,7 +39,7 @@
   const today = () => key(new Date());
   const parse = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
   const addDays = (k, n) => { const d = parse(k); d.setDate(d.getDate() + n); return key(d); };
-  const dow = k => (parse(k).getDay() + 6) % 7;             // Monday = 0
+  const dow = k => (parse(k).getDay() + 6) % 7;
   const scheduled = (h, k) => h.days[dow(k)] && k >= h.createdAt;
 
   // ---------- progress ----------
@@ -47,7 +59,6 @@
     return hs.reduce((a, h) => a + ratio(h, k), 0) / hs.length;
   }
   function streak(h, upto) {
-    // consecutive scheduled days completed, ending today (or yesterday if today is still open)
     let k = upto || today(), n = 0;
     if (scheduled(h, k) && !done(h, k)) k = addDays(k, -1);
     for (let i = 0; i < 4000; i++) {
@@ -69,102 +80,104 @@
   }
   const completions = h => Object.keys(state.log).filter(k => done(h, k)).length;
 
-  // ---------- rendering helpers ----------
+  // ---------- rendering ----------
   const $ = s => document.querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const app = $('#app'), sheet = $('#sheet');
-  let view = 'today', selected = today(), statsMonth = today().slice(0, 7), statsHabit = 'all', weekOffset = 0;
+  const app = $('#app'), sheet = $('#sheet'), scrim = $('#scrim'), navc = $('#navc'), navcT = $('#navc-t');
+  let view = 'today', selected = today(), statsMonth = today().slice(0, 7), statsHabit = 'all';
+  const TITLES = { today: 'Today', stats: 'Statistics', awards: 'Achievements', settings: 'Settings' };
 
   function render() {
     app.innerHTML = ({ today: renderToday, stats: renderStats, awards: renderAwards, settings: renderSettings })[view]();
-    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('is-on', t.dataset.view === view));
-    window.scrollTo(0, 0);
+    navcT.textContent = view === 'today' ? todayTitle() : TITLES[view];
+    renderTabs();
+    window.scrollTo(0, 0); onScroll();
   }
+  function renderTabs() {
+    $('#tabbar').innerHTML = [['today', 'circle-check', 'Today'], ['stats', 'chart-no-axes-column', 'Statistics'], ['awards', 'award', 'Awards'], ['settings', 'settings', 'Settings']]
+      .map(([v, i, l]) => `<button class="tab${v === view ? ' on' : ''}" data-view="${v}">${ic(i, 26)}${l}</button>`).join('');
+  }
+  function onScroll() { navc.classList.toggle('show', window.scrollY > 44); }
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  const todayTitle = () => { const t = today(); return selected === t ? 'Today' : selected === addDays(t, -1) ? 'Yesterday' : parse(selected).toLocaleDateString(undefined, { weekday: 'long' }); };
 
   // ---------- Today ----------
   function renderToday() {
-    const live = state.habits.filter(h => !h.archived);
-    const t = today();
-    const d = parse(selected);
-    const title = selected === t ? 'Today' : selected === addDays(t, -1) ? 'Yesterday' : d.toLocaleDateString(undefined, { weekday: 'long' });
-    const sub = d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
-    let html = `<div class="top"><div><div class="top__title">${title}</div><div class="top__sub">${sub}</div></div>
-      <button class="iconbtn iconbtn--accent" data-act="add" aria-label="Add habit">+</button></div>`;
-    // week strip: Monday..Sunday of the selected week
-    const monday = addDays(selected, -dow(selected) + weekOffset * 7);
+    const live = state.habits.filter(h => !h.archived), t = today(), d = parse(selected);
+    const sub = d.toLocaleDateString(undefined, { weekday: selected === t ? undefined : 'long', day: 'numeric', month: 'long' });
+    let html = `<div class="lt-row"><div><h1 class="lt">${todayTitle()}</h1><div class="lt-sub">${sub}</div></div><button class="navbtn" data-act="add" aria-label="New habit">${ic('plus', 24)}</button></div>`;
+    // week strip
+    const monday = addDays(selected, -dow(selected));
     html += '<div class="week">';
     for (let i = 0; i < 7; i++) {
       const k = addDays(monday, i), p = dayProgress(k, live), fut = k > t;
-      html += `<button class="day${k === selected ? ' is-today' : ''}${fut ? ' is-future' : ''}" data-act="pick" data-k="${k}">
-        <span class="day__name">${DAYS[i]}</span><span class="day__ring" style="--p:${p == null ? 0 : Math.round(p * 100)}"><span>${parse(k).getDate()}</span></span></button>`;
+      html += `<button class="day${k === selected ? ' is-sel' : ''}${fut ? ' is-future' : ''}" data-act="pick" data-k="${k}"><span class="day__n">${DAYS[i]}</span><span class="day__r">${ring(36, 3, p == null ? 0 : p)}<span>${parse(k).getDate()}</span></span></button>`;
     }
     html += '</div>';
-    if (!live.length) return html + `<div class="empty"><b>No habits yet</b>Tap + to add your first one.<br>Meditate, drink water, no snacks…</div>`;
+    if (!live.length) return html + `<div class="empty"><b>No habits yet</b>Tap + to add your first one.</div>`;
     const dayHabits = live.filter(h => scheduled(h, selected));
-    if (!dayHabits.length) return html + `<div class="empty"><b>Nothing scheduled</b>No habits on this day.</div>`;
+    // the coloured moment: the day's progress
+    const p = dayProgress(selected, live), nDone = dayHabits.filter(h => done(h, selected)).length;
+    const best = Math.max(0, ...live.map(h => streak(h, selected)));
+    if (dayHabits.length) html += `<div class="hero"><div><div class="hero__k">${selected === t ? 'Today' : parse(selected).toLocaleDateString(undefined, { weekday: 'long' })}</div><div class="hero__n">${nDone} of ${dayHabits.length} done</div><div class="hero__s">${best ? `Longest current streak ${best} day${best === 1 ? '' : 's'}` : 'Start a streak'}</div></div><div class="ring" style="position:relative">${ring(72, 7, p || 0)}<span class="ring__label">${Math.round((p || 0) * 100)}%</span></div></div>`;
+    else return html + `<div class="empty"><b>Nothing scheduled</b>No habits on this day.</div>`;
     GROUPS.forEach(g => {
       const hs = dayHabits.filter(h => h.group === g);
       if (!hs.length) return;
-      const p = hs.reduce((a, h) => a + ratio(h, selected), 0) / hs.length;
-      html += `<section class="group"><div class="group__head"><div class="group__title">${GROUP_ICON[g]} ${g}</div>
-        <div class="group__ring" style="--p:${Math.round(p * 100)};--c:${hs[0].color}"><span>${hs.filter(h => done(h, selected)).length}/${hs.length}</span></div></div>`;
-      hs.forEach(h => { html += habitCard(h); });
-      html += '</section>';
+      html += `<div class="eyebrow"><span>${g}</span><span>${hs.filter(h => done(h, selected)).length}/${hs.length}</span></div><div class="panel">`;
+      hs.forEach(h => { html += habitRow(h); });
+      html += '</div>';
     });
     return html;
   }
-  function habitCard(h) {
+  function habitRow(h) {
     const k = selected, v = value(h, k), tg = target(h), isDone = done(h, k), s = streak(h, k);
     let meta = h.days.every(Boolean) ? 'Every day' : h.days.filter(Boolean).length + ' days a week';
-    if (h.type === 'count') meta += `, ${v}/${tg} ${h.unit || ''}`.trimEnd();
-    if (h.type === 'timer') meta += `, ${v}/${tg} min`;
+    if (h.type === 'count') meta += ` · ${v} of ${tg}${h.unit ? ' ' + esc(h.unit) : ''}`;
+    if (h.type === 'timer') meta += ` · ${v} of ${tg} min`;
+    if (h.reminder) meta += ` · ${h.reminder}`;
     let act;
-    if (h.type === 'check') act = `<button class="check" data-act="toggle" data-id="${h.id}" aria-label="Done">${isDone ? '✓' : ''}</button>`;
-    else if (h.type === 'count') act = `<div class="stepper"><button data-act="dec" data-id="${h.id}">−</button><span>${v}</span><button data-act="inc" data-id="${h.id}">+</button></div>`;
-    else act = `<button class="check" data-act="timer" data-id="${h.id}" aria-label="Timer">${isDone ? '✓' : '▶'}</button>`;
-    return `<div class="habit${isDone ? ' is-done' : ''}" style="--c:${h.color}" data-act="edit" data-id="${h.id}">
-      <div class="habit__icon">${h.icon}</div>
-      <div class="habit__body"><div class="habit__name">${esc(h.name)}</div>
-      <div class="habit__meta"><span>${meta}</span>${s ? `<span class="habit__streak">🔥 ${s}</span>` : ''}</div></div>
-      <div class="habit__act">${act}</div>
-      ${h.type !== 'check' ? `<div class="habit__bar" style="--p:${Math.round(ratio(h, k) * 100)}"></div>` : ''}</div>`;
+    if (h.type === 'check') act = `<button class="chk" data-act="toggle" data-id="${h.id}" aria-label="${isDone ? 'Undo' : 'Done'}"><i>${ic('check', 16)}</i></button>`;
+    else if (h.type === 'count') act = `<div class="stepper"><button data-act="dec" data-id="${h.id}" aria-label="Less">${ic('minus', 16)}</button><span>${v}</span><button data-act="inc" data-id="${h.id}" aria-label="More">${ic('plus', 16)}</button></div>`;
+    else act = `<button class="chk${isDone ? '' : ' play'}" data-act="timer" data-id="${h.id}" aria-label="Timer"><i>${ic(isDone ? 'check' : 'play', 14)}</i></button>`;
+    return `<div class="row${isDone ? ' is-done' : ''}"><button class="row__lead" data-act="edit" data-id="${h.id}" aria-label="Edit">${ic(h.icon, 20)}</button>
+      <button class="row__body" data-act="edit" data-id="${h.id}"><div class="row__t">${esc(h.name)}</div><div class="row__m"><span>${meta}</span>${s ? `<span class="streak">${ic('flame', 13)}${s}</span>` : ''}</div>${h.type !== 'check' ? `<div class="row__bar" style="--p:${Math.round(ratio(h, k) * 100)}"><i></i></div>` : ''}</button>
+      <div class="row__act">${act}</div></div>`;
   }
 
   // ---------- Stats ----------
   function renderStats() {
     const live = state.habits.filter(h => !h.archived);
-    const hs = statsHabit === 'all' ? live : live.filter(h => h.id === statsHabit);
-    const t = today();
-    let html = `<div class="top"><div class="top__title">Statistics</div></div>`;
-    html += `<div class="field"><select id="statsHabit"><option value="all">All habits</option>${live.map(h => `<option value="${h.id}"${h.id === statsHabit ? ' selected' : ''}>${h.icon} ${esc(h.name)}</option>`).join('')}</select></div>`;
-    // month calendar
+    const hs = statsHabit === 'all' ? live : live.filter(h => h.id === statsHabit), t = today();
+    let html = `<div class="lt-row"><h1 class="lt">Statistics</h1></div>
+      <div class="selwrap"><select class="select" id="statsHabit"><option value="all">All habits</option>${live.map(h => `<option value="${h.id}"${h.id === statsHabit ? ' selected' : ''}>${esc(h.name)}</option>`).join('')}</select>${ic('chevron-down', 16)}</div>`;
     const [y, m] = statsMonth.split('-').map(Number);
     const first = new Date(y, m - 1, 1), label = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
     const start = addDays(key(first), -((first.getDay() + 6) % 7));
-    html += `<div class="card"><div class="card__title"><span>${label}</span><div class="nav"><button data-act="month" data-n="-1">‹</button><button data-act="month" data-n="1">›</button></div></div><div class="cal">`;
-    DAYS.forEach(d => { html += `<div class="cal__h">${d.toUpperCase()}</div>`; });
+    html += `<div class="eyebrow"><span>Calendar</span></div><div class="panel card"><div class="card__t"><span>${label}</span><div class="nav"><button data-act="month" data-n="-1" aria-label="Previous month">${ic('chevron-left', 20)}</button><button data-act="month" data-n="1" aria-label="Next month">${ic('chevron-right', 20)}</button></div></div><div class="cal">`;
+    DAYS.forEach(d => { html += `<div class="cal__h">${d[0]}</div>`; });
+    const full = k => { const p = k <= t ? dayProgress(k, hs) : null; return p != null && p >= 0.999; };
     for (let i = 0; i < 42; i++) {
-      const k = addDays(start, i), inMonth = k.slice(0, 7) === statsMonth, p = k <= t ? dayProgress(k, hs) : null;
-      const full = p != null && p >= 0.999, prevFull = i % 7 !== 0 && (() => { const pk = addDays(k, -1); const pp = pk <= t ? dayProgress(pk, hs) : null; return pp != null && pp >= 0.999; })();
-      html += `<div class="cal__d${inMonth ? '' : ' is-out'}${full ? ' is-full' : ''}${full && prevFull ? ' is-chain' : ''}"><span style="--p:${p == null ? 0 : Math.round(p * 100)}">${parse(k).getDate()}</span></div>`;
+      const k = addDays(start, i), inMonth = k.slice(0, 7) === statsMonth, p = k <= t ? dayProgress(k, hs) : null, f = full(k);
+      html += `<div class="cal__d${inMonth ? '' : ' is-out'}${f ? ' is-full' : ''}${f && i % 7 !== 0 && full(addDays(k, -1)) ? ' is-chain' : ''}"><span>${!f && p ? ring(30, 2.5, p) : ''}${parse(k).getDate()}</span></div>`;
     }
     html += '</div></div>';
-    // records, last 30 days
     const from = addDays(t, -29), tot = totals(hs, from, t);
     const cur = hs.length ? Math.max(...hs.map(h => streak(h))) : 0, best = hs.length ? Math.max(...hs.map(bestStreak)) : 0;
-    html += `<div class="card"><div class="card__title"><span>Records</span><span style="color:var(--muted);font-weight:400">Last 30 days</span></div><div class="records">
-      <div class="rec"><b>${cur} 🔥</b><span>Current streak</span></div><div class="rec"><b>${best} 🏅</b><span>Best streak</span></div>
-      <div class="rec"><b>${tot.comp}</b><span>Completed</span></div><div class="rec"><b>${tot.sched ? Math.round(tot.comp / tot.sched * 100) : 0}%</b><span>Success rate</span></div></div></div>`;
-    // this week per habit
+    html += `<div class="eyebrow"><span>Records</span><span>Last 30 days</span></div><div class="panel recs">
+      <div class="rec"><b>${cur}</b><span>Current streak</span></div><div class="rec"><b>${best}</b><span>Best streak</span></div>
+      <div class="rec"><b>${tot.comp}</b><span>Completed</span></div><div class="rec"><b>${tot.sched ? Math.round(tot.comp / tot.sched * 100) : 0}%</b><span>Success rate</span></div></div>`;
     const monday = addDays(t, -dow(t));
-    html += `<div class="card"><div class="card__title"><span>This week</span></div><div class="wgrid"><div></div>${DAYS.map(d => `<div class="h">${d[0]}</div>`).join('')}`;
+    html += `<div class="eyebrow"><span>This week</span></div><div class="panel card"><div class="wk"><div></div>${DAYS.map(d => `<div class="h">${d[0]}</div>`).join('')}`;
+    if (!live.length) html += `<div class="n" style="grid-column:1/-1;color:var(--text-2)">No habits yet.</div>`;
     live.forEach(h => {
-      html += `<div class="n">${h.icon} ${esc(h.name)}</div>`;
+      html += `<div class="n">${ic(h.icon, 16)}${esc(h.name)}</div>`;
       for (let i = 0; i < 7; i++) {
         const k = addDays(monday, i);
-        if (!scheduled(h, k) || k > t) { html += '<div class="dot" style="opacity:.35"></div>'; continue; }
+        if (!scheduled(h, k) || k > t) { html += '<div class="dot off"></div>'; continue; }
         const r = ratio(h, k);
-        html += `<div class="dot${r >= 1 ? ' is-on' : r > 0 ? ' is-part' : ''}" style="--c:${h.color};--p:${Math.round(r * 100)}">${r >= 1 ? '✓' : ''}</div>`;
+        html += `<div class="dot${r >= 1 ? ' on' : ''}">${r >= 1 ? ic('check', 12) : r > 0 ? ring(22, 2.5, r) : ''}</div>`;
       }
     });
     return html + '</div></div>';
@@ -175,97 +188,159 @@
     const live = state.habits.filter(h => !h.archived);
     const best = live.length ? Math.max(...live.map(bestStreak)) : 0;
     const total = live.reduce((a, h) => a + completions(h), 0);
-    let html = `<div class="top"><div class="top__title">Achievements</div></div><div class="section">Longest streak · ${best} days</div><div class="badges">`;
-    STREAKS.forEach(n => { html += `<div class="badge${best >= n ? ' is-on' : ''}"><div class="hex">🔥</div>${n} days</div>`; });
-    html += `</div><div class="section" style="margin-top:22px">Completions · ${total}</div><div class="badges">`;
-    GOALS.forEach(n => { html += `<div class="badge flag${total >= n ? ' is-on' : ''}"><div class="hex">🏁</div>${n}</div>`; });
+    let html = `<div class="lt-row"><h1 class="lt">Achievements</h1></div><div class="eyebrow"><span>Longest streak</span><span>${best} day${best === 1 ? '' : 's'}</span></div><div class="panel badges">`;
+    STREAKS.forEach(n => { html += `<div class="badge${best >= n ? ' on' : ''}"><i>${ic('flame', 26)}</i>${n} days</div>`; });
+    html += `</div><div class="eyebrow"><span>Completions</span><span>${total}</span></div><div class="panel badges">`;
+    GOALS.forEach(n => { html += `<div class="badge${total >= n ? ' on' : ''}"><i>${ic('flag', 24)}</i>${n}</div>`; });
     return html + '</div>';
   }
 
   // ---------- Settings ----------
   function renderSettings() {
     const n = state.habits.filter(h => !h.archived).length, a = state.habits.length - n;
-    return `<div class="top"><div class="top__title">Settings</div></div>
-      <div class="list"><button data-act="export">Export data <small>JSON</small></button><button data-act="import">Import data <small>replaces everything</small></button></div>
-      <div class="list"><button data-act="archived">Archived habits <small>${a}</small></button></div>
-      <div class="list"><button data-act="wipe" style="color:#ff5c5c">Delete all data</button></div>
-      <p style="color:var(--muted);font-size:13px;line-height:1.5">${n} habit${n === 1 ? '' : 's'}. Everything is stored on this device only. Export now and then if you care about it.</p>
-      <p style="color:var(--muted);font-size:12px">Tally · ${new Date().getFullYear()}</p>`;
+    const row = (act, label, small, cls = '') => `<button class="row ${cls}" data-act="${act}"><span>${label}</span><small>${small || ''}</small>${ic('chevron-right', 18, 'chev')}</button>`;
+    return `<div class="lt-row"><h1 class="lt">Settings</h1></div>
+      <div class="eyebrow"><span>Data</span></div><div class="panel list">${row('export', 'Export', 'JSON file')}${row('import', 'Import', 'Replaces everything')}</div>
+      <div class="eyebrow"><span>Reminders</span></div><div class="panel list">${notifRow()}${notifState() === 'granted' ? row('notif-test', 'Send a test reminder', '') : ''}</div>
+      <p class="note">${notifNote()}</p>
+      <div class="eyebrow"><span>Habits</span></div><div class="panel list">${row('archived', 'Archived', a)}</div>
+      <div class="panel list" style="margin-top:22px">${row('wipe', 'Delete all data', '', 'danger')}</div>
+      <p class="note">${n} habit${n === 1 ? '' : 's'}. Everything is stored on this device only; export now and then if you care about it.</p>`;
   }
 
   // ---------- sheets ----------
-  function openSheet(html) { sheet.innerHTML = `<div class="sheet__panel"><div class="sheet__grab"></div>${html}</div>`; sheet.hidden = false; }
-  function closeSheet() { sheet.hidden = true; sheet.innerHTML = ''; stopTimer(); }
-  sheet.addEventListener('click', e => { if (e.target === sheet) closeSheet(); });
+  let closeTimer = null;
+  function openSheet(html) {
+    clearTimeout(closeTimer);
+    sheet.innerHTML = `<div class="grab"></div>${html}`;
+    sheet.classList.remove('closing'); scrim.classList.add('open');
+    requestAnimationFrame(() => sheet.classList.add('open'));
+  }
+  function closeSheet() {
+    stopTimer(); scrim.classList.remove('open');
+    sheet.classList.add('closing'); sheet.classList.remove('open');
+    closeTimer = setTimeout(() => { sheet.innerHTML = ''; sheet.classList.remove('closing'); }, 320);
+  }
+  scrim.addEventListener('click', closeSheet);
 
   let draft;
   function editSheet(h) {
-    draft = h ? JSON.parse(JSON.stringify(h)) : { id: uid(), name: '', icon: '🧘', color: COLORS[0], group: 'Morning', type: 'check', target: 1, unit: '', days: [1, 1, 1, 1, 1, 1, 1], createdAt: today() };
+    draft = h ? JSON.parse(JSON.stringify(h)) : { id: uid(), name: '', icon: 'brain', group: 'Morning', type: 'check', target: 1, unit: '', days: [1, 1, 1, 1, 1, 1, 1], createdAt: today() };
     draft._new = !h;
     renderEditSheet(true);
   }
   function renderEditSheet(first) {
     const isNew = draft._new;
-    openSheet(`<div class="sheet__title"><span>${isNew ? 'New habit' : 'Edit habit'}</span><button class="iconbtn" data-act="close">✕</button></div>
-      <div class="field"><label>Name</label><input type="text" id="f-name" placeholder="Meditate" value="${esc(draft.name)}" autocomplete="off"></div>
-      <div class="field"><label>Icon</label><div class="emojis">${EMOJIS.map(e => `<button class="emoji${e === draft.icon ? ' is-on' : ''}" data-set="icon" data-v="${e}">${e}</button>`).join('')}</div></div>
-      <div class="field"><label>Colour</label><div class="swatches">${COLORS.map(c => `<button class="swatch${c === draft.color ? ' is-on' : ''}" style="background:${c}" data-set="color" data-v="${c}" aria-label="${c}"></button>`).join('')}</div></div>
-      <div class="field"><label>When</label><div class="chips">${GROUPS.map(g => `<button class="chip${g === draft.group ? ' is-on' : ''}" data-set="group" data-v="${g}">${GROUP_ICON[g]} ${g}</button>`).join('')}</div></div>
-      <div class="field"><label>Type</label><div class="chips">${[['check', 'Check off'], ['count', 'Count'], ['timer', 'Timer']].map(([v, l]) => `<button class="chip${v === draft.type ? ' is-on' : ''}" data-set="type" data-v="${v}">${l}</button>`).join('')}</div></div>
-      <div id="f-target"></div>
-      <div class="field"><label>Days</label><div class="days">${DAYS.map((d, i) => `<button class="dayb${draft.days[i] ? ' is-on' : ''}" data-day="${i}">${d[0]}</button>`).join('')}</div></div>
+    const seg = (name, opts) => `<div class="seg">${opts.map(([v, l]) => `<button class="${v === draft[name] ? 'on' : ''}" data-set="${name}" data-v="${v}">${l}</button>`).join('')}</div>`;
+    openSheet(`<h2 class="sheet__t"><span>${isNew ? 'New habit' : 'Edit habit'}</span><button class="navbtn" data-act="close" aria-label="Close">${ic('x', 22)}</button></h2>
+      <div class="panel form">
+        <div class="frow"><label for="f-name">Name</label><input type="text" id="f-name" placeholder="Meditate" value="${esc(draft.name)}" autocomplete="off" autocapitalize="sentences"></div>
+        <div class="frow frow--col"><label>Icon</label><div class="igrid">${HABIT_ICONS.map(n => `<button class="${n === draft.icon ? 'on' : ''}" data-set="icon" data-v="${n}" aria-label="${n}">${ic(n, 20)}</button>`).join('')}</div></div>
+        <div class="frow frow--col"><label>When</label>${seg('group', GROUPS.map(g => [g, g]))}</div>
+        <div class="frow frow--col"><label>Type</label>${seg('type', [['check', 'Check off'], ['count', 'Count'], ['timer', 'Timer']])}</div>
+        <div id="f-target"></div>
+        <div class="frow"><label for="f-r">Reminder</label><input type="time" id="f-r" value="${draft.reminder || ''}"><button class="navbtn small" data-act="clear-r" aria-label="No reminder" ${draft.reminder ? '' : 'hidden'}>${ic('x', 16)}</button></div>
+        <div class="frow frow--col"><label>Days</label><div class="days">${DAYS.map((d, i) => `<button class="dayb${draft.days[i] ? ' on' : ''}" data-day="${i}" aria-label="${d}">${d[0]}</button>`).join('')}</div></div>
+      </div>
       <button class="btn" data-act="save">${isNew ? 'Add habit' : 'Save'}</button>
-      ${isNew ? '' : `<button class="btn btn--ghost" data-act="archive">${draft.archived ? 'Restore' : 'Archive'}</button><button class="btn btn--danger" data-act="delete">Delete habit and its history</button>`}`);
+      ${isNew ? '' : `<button class="btn btn--2" data-act="archive">${draft.archived ? 'Restore' : 'Archive'}</button><button class="btn btn--danger" data-act="delete">Delete habit and history</button>`}`);
     renderTarget();
-    if (first && isNew) setTimeout(() => $('#f-name').focus(), 50);
+    if (first && isNew) setTimeout(() => $('#f-name').focus(), 420);
   }
   function renderTarget() {
     const el = $('#f-target'); if (!el) return;
-    if (draft.type === 'count') el.innerHTML = `<div class="field row"><div><label>Target per day</label><input type="number" id="f-t" min="1" value="${draft.target || 1}"></div><div><label>Unit</label><input type="text" id="f-u" placeholder="glasses" value="${esc(draft.unit || '')}"></div></div>`;
-    else if (draft.type === 'timer') el.innerHTML = `<div class="field"><label>Minutes per day</label><input type="number" id="f-t" min="1" value="${draft.target || 10}"></div>`;
+    if (draft.type === 'count') el.innerHTML = `<div class="frow"><label for="f-t">Target</label><input type="number" id="f-t" min="1" inputmode="numeric" value="${draft.target || 1}"></div><div class="frow"><label for="f-u">Unit</label><input type="text" id="f-u" placeholder="glasses" value="${esc(draft.unit || '')}"></div>`;
+    else if (draft.type === 'timer') el.innerHTML = `<div class="frow"><label for="f-t">Minutes</label><input type="number" id="f-t" min="1" inputmode="numeric" value="${draft.target || 10}"></div>`;
     else el.innerHTML = '';
   }
   function readDraft() {
-    draft.name = $('#f-name').value.trim();
+    const n = $('#f-name'); if (n) draft.name = n.value.trim();
     const t = $('#f-t'); if (t) draft.target = Math.max(1, parseInt(t.value, 10) || 1);
     const u = $('#f-u'); if (u) draft.unit = u.value.trim();
+    const r = $('#f-r'); if (r) draft.reminder = r.value || '';
   }
 
   // ---------- timer ----------
   let tick = null, timer = null;
   function timerSheet(h) {
-    const k = selected, base = value(h, k);
-    timer = { h, k, base, secs: 0, running: false };
-    openSheet(`<div class="sheet__title"><span>${h.icon} ${esc(h.name)}</span><button class="iconbtn" data-act="close">✕</button></div>
-      <div class="timer"><div class="timer__ring" id="t-ring" style="--c:${h.color};--p:0"><div class="timer__time" id="t-time">00:00</div></div>
-      <div style="color:var(--muted);margin-bottom:14px">${base}/${target(h)} minutes today</div>
-      <div class="row"><button class="btn btn--ghost" data-act="t-plus">+5 min</button><button class="btn" id="t-start" data-act="t-start">Start</button></div>
-      <button class="btn btn--ghost" data-act="t-save">Save and close</button></div>`);
+    timer = { h, k: selected, base: value(h, selected), secs: 0, running: false };
+    openSheet(`<h2 class="sheet__t"><span>${esc(h.name)}</span><button class="navbtn" data-act="close" aria-label="Close">${ic('x', 22)}</button></h2>
+      <div class="timer"><div class="ring" id="t-ring">${ring(220, 10, timer.base / target(h))}<div class="timer__time" id="t-time">00:00</div></div>
+      <div class="timer__sub" id="t-sub">${timer.base} of ${target(h)} minutes today</div>
+      <div class="btns"><button class="btn btn--2" data-act="t-plus">+5 min</button><button class="btn" data-act="t-start">Start</button></div>
+      <button class="btn btn--2" data-act="t-save">Save and close</button></div>`);
   }
   function paintTimer() {
     const m = Math.floor(timer.secs / 60), s = timer.secs % 60;
     $('#t-time').textContent = pad(m) + ':' + pad(s);
-    $('#t-ring').style.setProperty('--p', Math.min(100, Math.round((timer.base + timer.secs / 60) / target(timer.h) * 100)));
+    const svg = $('#t-ring svg'), c = svg.querySelector('.p'), len = parseFloat(c.getAttribute('stroke-dasharray'));
+    c.setAttribute('stroke-dashoffset', (len * (1 - Math.min(1, (timer.base + timer.secs / 60) / target(timer.h)))).toFixed(2));
   }
   function stopTimer() { if (tick) clearInterval(tick); tick = null; if (timer) timer.running = false; }
   function commitTimer() { if (!timer) return; setValue(timer.h, timer.k, Math.round(timer.base + timer.secs / 60)); }
+
+  // ---------- reminders ----------
+  // A habit can carry a time. While Tally is open (or in the background on
+  // platforms that keep web apps alive), the minute comes round and a
+  // notification is shown through the service worker. Nothing leaves the
+  // device: there is no push server.
+  const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  function notifState() { return !('Notification' in window) ? 'unsupported' : Notification.permission; }
+  function notifRow() {
+    const st = notifState();
+    const label = { granted: 'Allowed', denied: 'Blocked in Settings', default: 'Off', unsupported: 'Not available here' }[st];
+    if (st === 'default') return `<button class="row" data-act="notif"><span>Notifications</span><small style="color:var(--accent)">Allow</small></button>`;
+    return `<div class="row"><span>Notifications</span><small>${label}</small></div>`;
+  }
+  function notifNote() {
+    const st = notifState();
+    if (st === 'unsupported' && isIOS() && !standalone()) return 'On iPhone, notifications work once Tally is on the Home Screen: open this page in Safari, tap Share, then Add to Home Screen.';
+    if (st === 'denied') return 'Notifications are blocked for Tally. Turn them on in the phone\'s Settings, under Notifications.';
+    return 'Set a time on any habit and a reminder arrives at that minute while Tally is open. Reminders while the app is closed need a push server, which Tally does not have yet.';
+  }
+  function askNotifications() {
+    if (!('Notification' in window)) return;
+    Notification.requestPermission().then(() => render());
+  }
+  function notify(h, body) {
+    if (notifState() !== 'granted') return;
+    const opts = { body, tag: 'tally-' + h.id, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { id: h.id } };
+    navigator.serviceWorker.ready.then(r => r.showNotification(h.name, opts)).catch(() => { try { new Notification(h.name, opts); } catch (e) {} });
+  }
+  function checkReminders() {
+    const t = today(), now = new Date(), hm = pad(now.getHours()) + ':' + pad(now.getMinutes());
+    state.notified = state.notified && state.notified.date === t ? state.notified : { date: t, ids: [] };
+    let changed = false;
+    state.habits.forEach(h => {
+      if (h.archived || !h.reminder || h.reminder !== hm || !scheduled(h, t) || done(h, t) || state.notified.ids.includes(h.id)) return;
+      const what = h.type === 'count' ? `${target(h)}${h.unit ? ' ' + h.unit : ''} today` : h.type === 'timer' ? `${target(h)} minutes today` : 'Time for it.';
+      notify(h, what); state.notified.ids.push(h.id); changed = true;
+    });
+    if (changed) save();
+  }
+  setInterval(checkReminders, 20000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { checkReminders(); render(); } });
 
   // ---------- events ----------
   document.addEventListener('click', e => {
     const tab = e.target.closest('.tab'); if (tab) { view = tab.dataset.view; render(); return; }
     const el = e.target.closest('[data-act],[data-set],[data-day]'); if (!el) return;
     const act = el.dataset.act, id = el.dataset.id, h = id && state.habits.find(x => x.id === id);
-    if (el.dataset.set) { e.stopPropagation(); readDraft(); draft[el.dataset.set] = el.dataset.v; if (el.dataset.set === 'type') draft.target = draft.type === 'timer' ? 10 : 1; renderEditSheet(false); return; }
-    if (el.dataset.day != null) { readDraft(); draft.days[el.dataset.day] = draft.days[el.dataset.day] ? 0 : 1; el.classList.toggle('is-on'); return; }
+    if (el.dataset.set) { readDraft(); draft[el.dataset.set] = el.dataset.v; if (el.dataset.set === 'type') draft.target = draft.type === 'timer' ? 10 : 1; renderEditSheet(false); return; }
+    if (el.dataset.day != null) { readDraft(); draft.days[el.dataset.day] = draft.days[el.dataset.day] ? 0 : 1; el.classList.toggle('on'); return; }
     switch (act) {
       case 'add': editSheet(null); break;
       case 'edit': editSheet(h); break;
       case 'close': closeSheet(); break;
+      case 'clear-r': readDraft(); draft.reminder = ''; renderEditSheet(false); break;
+      case 'notif': askNotifications(); break;
+      case 'notif-test': notify({ name: 'Tally', id: 'test' }, 'This is what a reminder looks like.'); break;
       case 'pick': selected = el.dataset.k; render(); break;
-      case 'toggle': e.stopPropagation(); setValue(h, selected, done(h, selected) ? 0 : 1); render(); break;
-      case 'inc': e.stopPropagation(); setValue(h, selected, value(h, selected) + 1); render(); break;
-      case 'dec': e.stopPropagation(); setValue(h, selected, value(h, selected) - 1); render(); break;
-      case 'timer': e.stopPropagation(); timerSheet(h); break;
+      case 'toggle': setValue(h, selected, done(h, selected) ? 0 : 1); render(); break;
+      case 'inc': setValue(h, selected, value(h, selected) + 1); render(); break;
+      case 'dec': setValue(h, selected, value(h, selected) - 1); render(); break;
+      case 'timer': timerSheet(h); break;
       case 't-start': if (timer.running) { stopTimer(); el.textContent = 'Start'; } else { timer.running = true; el.textContent = 'Pause'; tick = setInterval(() => { timer.secs++; paintTimer(); }, 1000); } break;
       case 't-plus': timer.secs += 300; paintTimer(); break;
       case 't-save': commitTimer(); closeSheet(); render(); break;
@@ -279,11 +354,11 @@
       }
       case 'archive': { const x = state.habits.find(y => y.id === draft.id); x.archived = !x.archived; save(); closeSheet(); render(); break; }
       case 'delete': if (confirm('Delete this habit and all its history?')) { state.habits = state.habits.filter(y => y.id !== draft.id); Object.keys(state.log).forEach(k => { delete state.log[k][draft.id]; }); save(); closeSheet(); render(); } break;
-      case 'month': { const [y, m] = statsMonth.split('-').map(Number); const d = new Date(y, m - 1 + Number(el.dataset.n), 1); statsMonth = key(d).slice(0, 7); render(); break; }
+      case 'month': { const [y, m] = statsMonth.split('-').map(Number); statsMonth = key(new Date(y, m - 1 + Number(el.dataset.n), 1)).slice(0, 7); render(); break; }
       case 'export': { const blob = new Blob([JSON.stringify(state, null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'tally-' + today() + '.json'; a.click(); break; }
-      case 'import': { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/json'; inp.onchange = () => { const f = inp.files[0]; if (!f) return; f.text().then(txt => { try { const s = JSON.parse(txt); if (!s.habits || !s.log) throw 0; if (confirm('Replace all current data with this file?')) { state = s; save(); render(); } } catch (x) { alert('That is not a Tally export.'); } }); }; inp.click(); break; }
-      case 'archived': { const a = state.habits.filter(x => x.archived); openSheet(`<div class="sheet__title"><span>Archived</span><button class="iconbtn" data-act="close">✕</button></div>${a.length ? a.map(x => `<div class="habit" style="--c:${x.color};margin-bottom:8px" data-act="edit" data-id="${x.id}"><div class="habit__icon">${x.icon}</div><div class="habit__body"><div class="habit__name">${esc(x.name)}</div><div class="habit__meta">${completions(x)} completions</div></div><div></div></div>`).join('') : '<p style="color:var(--muted)">Nothing archived.</p>'}`); break; }
-      case 'wipe': if (confirm('Delete every habit and all history on this device?')) { state = { habits: [], log: {}, order: [] }; save(); render(); } break;
+      case 'import': { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/json'; inp.onchange = () => { const f = inp.files[0]; if (!f) return; f.text().then(txt => { try { const s = JSON.parse(txt); if (!s.habits || !s.log) throw 0; if (confirm('Replace all current data with this file?')) { localStorage.setItem(KEY, JSON.stringify(s)); state = load(); render(); } } catch (x) { alert('That is not a Tally export.'); } }); }; inp.click(); break; }
+      case 'archived': { const a = state.habits.filter(x => x.archived); openSheet(`<h2 class="sheet__t"><span>Archived</span><button class="navbtn" data-act="close" aria-label="Close">${ic('x', 22)}</button></h2>${a.length ? `<div class="panel">${a.map(x => `<button class="row" data-act="edit" data-id="${x.id}"><span class="row__lead">${ic(x.icon, 20)}</span><span class="row__body"><div class="row__t">${esc(x.name)}</div><div class="row__m">${completions(x)} completions</div></span>${ic('chevron-right', 18, 'chev')}</button>`).join('')}</div>` : '<p class="note">Nothing archived.</p>'}`); break; }
+      case 'wipe': if (confirm('Delete every habit and all history on this device?')) { state = { habits: [], log: {} }; save(); render(); } break;
     }
   });
   document.addEventListener('change', e => { if (e.target.id === 'statsHabit') { statsHabit = e.target.value; render(); } });
