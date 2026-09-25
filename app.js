@@ -128,22 +128,51 @@
     // the coloured moment: the day's progress
     const p = dayProgress(selected, live), nDone = dayHabits.filter(h => done(h, selected)).length;
     const best = Math.max(0, ...live.map(h => streak(h, selected)));
-    if (dayHabits.length) html += `<div class="hero"><div><div class="hero__k">${selected === t ? 'Today' : parse(selected).toLocaleDateString(undefined, { weekday: 'long' })}</div><div class="hero__n">${nDone} of ${dayHabits.length} done</div><div class="hero__s">${best ? `Longest current streak ${best} day${best === 1 ? '' : 's'}` : 'Start a streak'}</div></div><div class="ring" style="position:relative">${ring(72, 7, p || 0)}<span class="ring__label">${Math.round((p || 0) * 100)}%</span></div></div>`;
+    if (dayHabits.length) html += activityRing(nDone, dayHabits.length, p || 0, best);
     else return html + `<div class="empty"><b>Nothing scheduled</b>No habits on this day.</div>`;
     GROUPS.forEach(g => {
       const hs = dayHabits.filter(h => h.group === g && h.kind !== 'todo');
       if (!hs.length) return;
-      html += `<div class="eyebrow"><span>${g}</span><span>${hs.filter(h => done(h, selected)).length}/${hs.length}</span></div><div class="panel">`;
-      hs.forEach(h => { html += habitRow(h); });
+      html += `<div class="eyebrow"><span>${g}</span><span>${hs.filter(h => done(h, selected)).length}/${hs.length}</span></div><div class="tiles">`;
+      hs.forEach(h => { html += habitTile(h); });
       html += '</div>';
     });
     const todos = dayHabits.filter(h => h.kind === 'todo');
     if (todos.length) {
-      html += `<div class="eyebrow"><span>To-do</span><span>${todos.filter(h => done(h, selected)).length}/${todos.length}</span></div><div class="panel">`;
-      todos.forEach(h => { html += habitRow(h); });
+      html += `<div class="eyebrow"><span>To-do</span><span>${todos.filter(h => done(h, selected)).length}/${todos.length}</span></div><div class="tiles">`;
+      todos.forEach(h => { html += habitTile(h); });
       html += '</div>';
     }
     return html;
+  }
+  // the day's progress as an activity ring: thick, round-capped, a gradient
+  // stroke that closes when everything is done
+  function activityRing(nDone, n, p, best) {
+    const size = 164, w = 17, r = (size - w) / 2, c = 2 * Math.PI * r;
+    return `<div class="aring"><div class="aring__ring"><svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true">
+      <defs><linearGradient id="aring-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#5e5ce6"/></linearGradient></defs>
+      <circle class="t" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="${w}"/>
+      <circle class="p" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="url(#aring-g)" stroke-width="${w}" stroke-linecap="round" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${(c * (1 - Math.min(1, p))).toFixed(2)}" transform="rotate(-90 ${size / 2} ${size / 2})"/></svg>
+      <div class="aring__c"><b>${nDone}<span>/${n}</span></b><small>${p >= 0.999 ? 'all done' : 'done'}</small></div></div>
+      <div class="aring__s">${best ? `${best}-day streak` : 'Start a streak'}</div></div>`;
+  }
+  // a habit as a tall tile: icon and control on top, name and progress below
+  function habitTile(h) {
+    const k = selected, v = value(h, k), tg = target(h), isDone = done(h, k), s = streak(h, k);
+    let meta = h.kind === 'todo' ? 'To-do' : h.days.every(Boolean) ? 'Every day' : h.days.filter(Boolean).length + ' days';
+    if (h.kind === 'bad' && h.type === 'check') meta = 'Avoid';
+    let prog = '';
+    if (h.type === 'count') prog = `${v} <span>/ ${tg}${h.unit ? ' ' + esc(h.unit) : ''}</span>`;
+    if (h.type === 'timer') prog = `<span id="el-${h.id}">${running(h) ? fmt(elapsedSec(h)) : fmt(v * 60)}</span> <span>/ ${tg} min</span>`;
+    let act;
+    if (h.type === 'check') act = `<button class="chk" data-act="toggle" data-id="${h.id}" aria-label="${isDone ? 'Undo' : 'Done'}"><i>${ic('check', 16)}</i></button>`;
+    else if (h.type === 'count') act = `<div class="stepper stepper--s"><button data-act="dec" data-id="${h.id}" aria-label="Less">${ic('minus', 14)}</button><button data-act="inc" data-id="${h.id}" aria-label="More">${ic('plus', 14)}</button></div>`;
+    else if (running(h)) act = `<button class="chk run" id="chk-${h.id}" data-act="timer" data-id="${h.id}" aria-label="Stop">${ring(44, 3, elapsedSec(h) / (tg * 60))}<i>${ic('pause', 14)}</i></button>`;
+    else act = `<button class="chk${isDone ? '' : ' play'}" data-act="timer" data-id="${h.id}" aria-label="Start"><i>${ic(isDone ? 'check' : 'play', 14)}</i></button>`;
+    return `<div class="tile${isDone ? ' is-done' : ''}${h.color ? ' is-tinted' : ''}${running(h) ? ' is-running' : ''}"${h.color ? ` style="--hc:${h.color}"` : ''}>
+      <div class="tile__top"><button class="row__lead" data-act="edit" data-id="${h.id}" aria-label="Edit">${ic(h.icon, 20)}</button>${act}</div>
+      <button class="tile__body" data-act="edit" data-id="${h.id}"><div class="tile__t">${esc(h.name)}</div><div class="tile__m">${meta}${s ? ` <span class="streak">${ic('flame', 12)}${s}</span>` : ''}</div>${prog ? `<div class="tile__p">${prog}</div>` : ''}</button>
+      ${h.type !== 'check' ? `<div class="row__bar" id="bar-${h.id}" style="--p:${Math.round((h.type === 'timer' && running(h) ? elapsedSec(h) / (tg * 60) : ratio(h, k)) * 100)}"><i></i></div>` : ''}</div>`;
   }
   function habitRow(h) {
     const k = selected, v = value(h, k), tg = target(h), isDone = done(h, k), s = streak(h, k);
