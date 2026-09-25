@@ -142,7 +142,7 @@
     r.setProperty('--accent', s.accent);
     if (dark) { r.setProperty('--bg-start', mix(s.bgStart, '#000000', .55)); r.setProperty('--bg-end', mix(s.bgEnd, '#000000', .55)); r.setProperty('--bg-mid', mix(mix(s.bgStart, s.bgEnd, .5), '#000000', .6)); }
     else { r.setProperty('--bg-start', mix(s.bgStart, '#ffffff', .15)); r.setProperty('--bg-end', mix(s.bgEnd, '#ffffff', .15)); r.setProperty('--bg-mid', mix(mix(s.bgStart, s.bgEnd, .5), '#ffffff', .35)); }
-    document.body.classList.toggle('custom-bg', !!s.customBg);
+    document.body.classList.toggle('custom-bg', !!s.customBg); document.documentElement.classList.toggle('custom-bg', !!s.customBg);
     const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.content = s.customBg ? getComputedStyle(document.documentElement).getPropertyValue('--bg-start').trim() : (dark ? '#000000' : '#f2f2f7');
   }
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { applyTheme(); });
@@ -152,12 +152,12 @@
     closeMenu();
     const top = stack[stack.length - 1];
     app.innerHTML = top ? renderPage(top) : ({ today: renderToday, stats: renderStats, sharing: renderSharing, settings: renderSettings })[view]();
-    $('#tabbar').hidden = !!top; $('#navc').hidden = true;
+    $('#tabbar').hidden = !!top; $('#navc').hidden = true; app.classList.toggle('today', !top && view === 'today');
     renderTabs(); renderNowBar();
     if (Object.keys(state.timers).length) ensureTick();
     if (!top && view === 'today') setupWeekSwipe();
     if (top && top.p === 'reorder') setupReorder();
-    window.scrollTo(0, 0);
+    app.scrollTop = 0;
   }
   const TABS = [['today', 'list-checks', 'Habits'], ['stats', 'chart-no-axes-column', 'Statistics'], ['sharing', 'users', 'Sharing'], ['settings', 'settings', 'Settings']];
   function renderTabs() {
@@ -257,8 +257,16 @@
   // is the current; landing on a neighbour moves the selection by a week
   function setupWeekSwipe() {
     const w = $('#weeks'); if (!w) return;
-    w.scrollLeft = w.clientWidth; let timer = null;
-    w.addEventListener('scroll', () => { clearTimeout(timer); timer = setTimeout(() => { const i = Math.round(w.scrollLeft / w.clientWidth); if (i === 1) return; selected = addDays(selected, (i - 1) * 7); render(); }, 80); }, { passive: true });
+    w.scrollLeft = w.clientWidth; let timer = null, armed = false;
+    setTimeout(() => { armed = true; }, 150);                 // the programmatic centring above also fires scroll
+    w.addEventListener('scroll', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!armed || !w.isConnected || !w.clientWidth) return;
+        const i = Math.round(w.scrollLeft / w.clientWidth); if (i === 1 || !isFinite(i)) return;
+        selected = addDays(selected, (i - 1) * 7); render();
+      }, 80);
+    }, { passive: true });
   }
 
   // ---------- habit detail sheet ----------
@@ -820,7 +828,7 @@
       case 'notif-test': if (state.push) syncPush({ test: true }); else notify({ name: 'Tally', id: 'test' }, 'This is what a reminder looks like.'); break;
       case 'push-on': subscribePush().then(render).catch(err => { console.warn(err); alert('Could not turn on reminders. Is Tally on the Home Screen?'); }); break;
       case 'push-off': unsubscribePush(); break;
-      case 'pick': selected = el.dataset.k; render(); break;
+      case 'pick': if (/^\d{4}-\d\d-\d\d$/.test(el.dataset.k)) selected = el.dataset.k; render(); break;
       case 'inc': mark(h, selected, 1); break;
       case 'dec': mark(h, selected, -1); break;
       case 'undo': setValue(h, selected, 0); setStatus(h, selected, ''); tap(); render(); refreshDetail(); break;

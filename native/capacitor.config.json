@@ -2,9 +2,9 @@
   "appId": "com.aiartlab.tally",
   "appName": "Tally",
   "webDir": "www",
-  "backgroundColor": "#c9cdc0",
+  "backgroundColor": "#b0d3f9",
   "ios": {
-    "backgroundColor": "#c9cdc0",
-    "contentInset": "automatic"
+    "backgroundColor": "#b0d3f9",
+    "contentInset": "never"
   }
 }
