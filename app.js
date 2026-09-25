@@ -20,7 +20,9 @@
   const GROUPS = ['Morning', 'Afternoon', 'Evening', 'Anytime'];
   const KINDS = [['good', 'Good'], ['health', 'Health'], ['bad', 'Bad'], ['todo', 'To-do']];
   const KIND_ICON = { good: 'circle-check', health: 'heart-pulse', bad: 'ban', todo: 'list-todo' };
-  const COLORS = ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#00c7be', '#007aff', '#5856d6', '#af52de', '#ff2d55'];
+  const COLORS = ['#d9b83e', '#c25f3a', '#8fa38a', '#b97a56', '#c9b58f', '#4f8a86', '#6d5a7a', '#5c6b7a', '#3a4238'];
+  const DARK_COLORS = ['#4f8a86', '#6d5a7a', '#5c6b7a', '#3a4238', '#c25f3a'];
+  const OLD_COLORS = { '#ff3b30': '#c25f3a', '#ff9500': '#b97a56', '#ffcc00': '#d9b83e', '#34c759': '#8fa38a', '#00c7be': '#4f8a86', '#007aff': '#5c6b7a', '#5856d6': '#6d5a7a', '#af52de': '#6d5a7a', '#ff2d55': '#c25f3a' };
   const T = window.TEMPLATES || {};
   const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const STREAKS = [2, 5, 7, 14, 30, 60, 90, 180, 365];
@@ -32,7 +34,7 @@
     try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
     if (!s || !s.habits) return { habits: [], log: {}, timers: {} };
     s.timers = s.timers || {};
-    s.habits.forEach(h => { if (!I[h.icon]) h.icon = EMOJI_MAP[h.icon] || 'circle-check'; if (!h.kind) h.kind = 'good'; if (h.color == null) h.color = ''; });   // v1 emoji -> line icon
+    s.habits.forEach(h => { if (!I[h.icon]) h.icon = EMOJI_MAP[h.icon] || 'circle-check'; if (!h.kind) h.kind = 'good'; if (h.color == null) h.color = ''; if (h.color && !COLORS.includes(h.color)) h.color = OLD_COLORS[h.color] || ''; });   // v1 emoji -> line icon; old palette -> muted
     return s;
   }
   let schedTimer = null;
@@ -96,7 +98,7 @@
 
   function render() {
     app.innerHTML = ({ today: renderToday, stats: renderStats, awards: renderAwards, settings: renderSettings })[view]();
-    navcT.textContent = view === 'today' ? todayTitle() : TITLES[view];
+    navcT.textContent = view === 'today' ? parse(selected).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : TITLES[view];
     renderTabs(); renderNowBar();
     if (Object.keys(state.timers).length) ensureTick();
     window.scrollTo(0, 0); onScroll();
@@ -105,12 +107,8 @@
   const TABS = [['today', 'list-checks', 'Habits'], ['stats', 'chart-no-axes-column', 'Statistics'], ['awards', 'award', 'Awards'], ['settings', 'settings', 'Settings']];
   function renderTabs() {
     const bar = $('#tabbar');
-    if (!bar.querySelector('.tabbar__glass')) {
-      bar.innerHTML = `<div class="tabbar__glass"></div>` + TABS.map(([v, i, l]) => `<button class="tab" data-view="${v}">${ic(i, 26)}${l}</button>`).join('');
-      dragTabs(bar);
-    }
+    if (!bar.querySelector('.tabbar__tabs')) bar.innerHTML = `<div class="tabbar__tabs">${TABS.slice(0, 3).map(([v, i, l]) => `<button class="tab" data-view="${v}">${l}</button>`).join('')}</div><button class="plus" data-act="add" aria-label="New habit">${ic('plus', 22)}</button>`;
     bar.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.view === view));
-    placeGlass(bar, TABS.findIndex(t => t[0] === view));
   }
   function placeGlass(bar, i, instant) {
     const g = bar.querySelector('.tabbar__glass');
@@ -160,37 +158,58 @@
   // ---------- Today ----------
   function renderToday() {
     const live = state.habits.filter(h => !h.archived), t = today(), d = parse(selected);
-    const sub = d.toLocaleDateString(undefined, { weekday: selected === t ? undefined : 'long', day: 'numeric', month: 'long' });
-    let html = `<div class="lt-row"><div><h1 class="lt">${todayTitle()}</h1><div class="lt-sub">${sub}</div></div><button class="navbtn" data-act="add" aria-label="New habit">${ic('plus', 24)}</button></div>`;
-    // week strip
+    const dateLine = d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+    const dayHabits = live.filter(h => scheduled(h, selected));
+    const nDone = dayHabits.filter(h => done(h, selected)).length;
+    let html = `<div class="top"><svg class="top__mark" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 17v30M27 17v30M37 17v30M47 17v30"/><path d="M11 44L53 20"/></svg><button class="navbtn" data-act="settings" aria-label="Settings">${ic('settings', 20)}</button></div>
+      <div class="lt-row"><div class="lt-sub">${dateLine}</div><h1 class="lt">${dayHabits.length ? `${nDone} of ${dayHabits.length} ${selected === t ? 'today' : 'done'}` : (live.length ? 'Nothing scheduled' : 'No habits yet')}</h1></div>`;
     const monday = addDays(selected, -dow(selected));
     html += '<div class="week">';
     for (let i = 0; i < 7; i++) {
       const k = addDays(monday, i), p = dayProgress(k, live), fut = k > t;
-      html += `<button class="day${k === selected ? ' is-sel' : ''}${fut ? ' is-future' : ''}" data-act="pick" data-k="${k}"><span class="day__n">${DAYS[i]}</span><span class="day__r">${ring(36, 3, p == null ? 0 : p)}<span>${parse(k).getDate()}</span></span></button>`;
+      html += `<button class="day${k === selected ? ' is-sel' : ''}${fut ? ' is-future' : ''}${p != null && p >= 0.999 ? ' is-full' : ''}" data-act="pick" data-k="${k}"><span class="day__n">${DAYS[i]}</span><span class="day__r">${parse(k).getDate()}</span></button>`;
     }
     html += '</div>';
     if (!live.length) return html + `<div class="empty"><b>No habits yet</b>Tap + to add your first one.</div>`;
-    const dayHabits = live.filter(h => scheduled(h, selected));
-    // the coloured moment: the day's progress
-    const p = dayProgress(selected, live), nDone = dayHabits.filter(h => done(h, selected)).length;
-    const best = Math.max(0, ...live.map(h => streak(h, selected)));
-    if (dayHabits.length) html += activityRing(nDone, dayHabits.length, p || 0, best);
-    else return html + `<div class="empty"><b>Nothing scheduled</b>No habits on this day.</div>`;
-    GROUPS.forEach(g => {
-      const hs = dayHabits.filter(h => h.group === g && h.kind !== 'todo');
+    if (!dayHabits.length) return html + `<div class="empty"><b>Nothing scheduled</b>No habits on this day.</div>`;
+    // one stroke per habit due today; filled when done, mustard while running
+    html += `<div class="daystrokes">${dayHabits.map(h => `<i class="${done(h, selected) ? 'f' : running(h) ? 'r' : ''}"></i>`).join('')}</div>`;
+    const order = [...GROUPS.map(g => [g, dayHabits.filter(h => h.group === g && h.kind !== 'todo')]), ['To-do', dayHabits.filter(h => h.kind === 'todo')]];
+    order.forEach(([g, hs]) => {
       if (!hs.length) return;
-      html += `<div class="eyebrow"><span>${g}</span><span>${hs.filter(h => done(h, selected)).length}/${hs.length}</span></div><div class="bars">`;
-      hs.forEach(h => { html += habitBar(h); });
-      html += '</div>';
+      html += `<div class="eyebrow"><span>${g}</span><span>${hs.filter(h => done(h, selected)).length}/${hs.length}</span></div>`;
+      hs.forEach(h => { html += habitCard(h); });
     });
-    const todos = dayHabits.filter(h => h.kind === 'todo');
-    if (todos.length) {
-      html += `<div class="eyebrow"><span>To-do</span><span>${todos.filter(h => done(h, selected)).length}/${todos.length}</span></div><div class="bars">`;
-      todos.forEach(h => { html += habitBar(h); });
-      html += '</div>';
-    }
     return html;
+  }
+  // a habit as a full-width card: name and control, DONE / GOAL, and the
+  // day's progress as tally strokes (one per unit for counts, forty for a
+  // timer, thirty for a check)
+  function habitCard(h) {
+    const k = selected, v = value(h, k), tg = target(h), isDone = done(h, k), s = streak(h, k), run = running(h);
+    const p = h.type === 'timer' && run ? Math.min(1, elapsedSec(h) / (tg * 60)) : ratio(h, k);
+    const n = h.type === 'count' ? Math.min(40, tg) : h.type === 'timer' ? 40 : 30;
+    const filled = p * n, full = Math.floor(filled), part = filled - full;
+    let strokes = '';
+    for (let i = 0; i < n; i++) strokes += i < full ? '<i class="f"></i>' : (i === full && part > 0.02 ? `<i class="h" style="--hp:${Math.round(part * 100)}"></i>` : '<i></i>');
+    let stats = '';
+    if (h.type === 'count') stats = `<div class="card__stats"><div><div class="lab">Done</div><div class="card__n">${v}${h.unit ? `<span> ${esc(h.unit)}</span>` : ''}</div></div><div class="r"><div class="lab">Goal</div><div class="card__n">${tg}</div></div></div>`;
+    else if (h.type === 'timer') stats = `<div class="card__stats"><div><div class="lab">Done</div><div class="card__n"><span id="el-${h.id}" style="font-weight:700;color:var(--fg)">${run ? fmt(elapsedSec(h)) : fmt(v * 60)}</span></div></div><div class="r"><div class="lab">Goal</div><div class="card__n">${tg}<span>:00</span></div></div></div>`;
+    let ctl;
+    if (h.type === 'check') ctl = `<button class="ctl${isDone ? ' on' : ''}" data-act="toggle" data-id="${h.id}" aria-label="${isDone ? 'Undo' : 'Done'}"><i>${ic('check', 18)}</i></button>`;
+    else if (h.type === 'count') ctl = `<div class="stepper">${v > 0 ? `<button class="ctl" data-act="dec" data-id="${h.id}" aria-label="Less"><i>${ic('minus', 16)}</i></button>` : ''}<button class="ctl${isDone ? ' on' : ''}" data-act="inc" data-id="${h.id}" aria-label="More"><i>${ic(isDone ? 'check' : 'plus', 16)}</i></button></div>`;
+    else if (run) ctl = `<button class="ctl run" id="chk-${h.id}" data-act="timer" data-id="${h.id}" aria-label="Pause">${ring(44, 2.5, p)}<i>${ic('pause', 16)}</i></button>`;
+    else ctl = `<button class="ctl${isDone ? ' on' : ''}" data-act="timer" data-id="${h.id}" aria-label="Start"><i>${ic(isDone ? 'check' : 'play', 16)}</i></button>`;
+    let sub = h.kind === 'todo' ? 'To-do' : h.days.every(Boolean) ? 'Every day' : h.days.filter(Boolean).length + ' days a week';
+    if (h.kind === 'bad' && h.type === 'check') sub = 'Avoid · ' + sub.toLowerCase();
+    sub += run ? ' · running' : isDone ? ' · done' : '';
+    if (h.reminder) sub += ' · ' + h.reminder;
+    const dark = h.color && DARK_COLORS.includes(h.color);
+    return `<section class="card${run ? ' is-run' : ''}${isDone ? ' is-done' : ''}${h.color ? ' is-tinted' : ''}${dark ? ' on-dark' : ''}"${h.color ? ` style="--hc:${h.color}"` : ''}>
+      <div class="card__head"><button class="card__name" data-act="edit" data-id="${h.id}">${ic(h.icon, 18)}<span>${esc(h.name)}</span></button>${ctl}</div>
+      <button class="card__body" data-act="edit" data-id="${h.id}">${stats}<div class="strokes${stats ? '' : ' s'}" id="bar-${h.id}">${strokes}</div>
+      <div class="card__sub"><span>${sub}</span>${s ? `<span class="streak">${ic('flame', 11)}${s}-day streak</span>` : ''}</div></button>
+    </section>`;
   }
   // the day's progress as an activity ring: thick, round-capped, a gradient
   // stroke that closes when everything is done
@@ -261,12 +280,12 @@
   function renderStats() {
     const live = state.habits.filter(h => !h.archived);
     const hs = statsHabit === 'all' ? live : live.filter(h => h.id === statsHabit), t = today();
-    let html = `<div class="lt-row"><h1 class="lt">Statistics</h1></div>
+    let html = `<div class="top"><svg class="top__mark" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 17v30M27 17v30M37 17v30M47 17v30"/><path d="M11 44L53 20"/></svg><button class="navbtn" data-act="settings" aria-label="Settings">${ic('settings', 20)}</button></div><div class="lt-row"><div class="lt-sub">Statistics</div><h1 class="lt">${live.length} habit${live.length === 1 ? '' : 's'}</h1></div>
       <div class="selwrap"><select class="select" id="statsHabit"><option value="all">All habits</option>${live.map(h => `<option value="${h.id}"${h.id === statsHabit ? ' selected' : ''}>${esc(h.name)}</option>`).join('')}</select>${ic('chevron-down', 16)}</div>`;
     const [y, m] = statsMonth.split('-').map(Number);
     const first = new Date(y, m - 1, 1), label = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
     const start = addDays(key(first), -((first.getDay() + 6) % 7));
-    html += `<div class="eyebrow"><span>Calendar</span></div><div class="panel card"><div class="card__t"><span>${label}</span><div class="nav"><button data-act="month" data-n="-1" aria-label="Previous month">${ic('chevron-left', 20)}</button><button data-act="month" data-n="1" aria-label="Next month">${ic('chevron-right', 20)}</button></div></div><div class="cal">`;
+    html += `<div class="block"><div class="block__t"><span>${label}</span><div class="nav"><button data-act="month" data-n="-1" aria-label="Previous month">${ic('chevron-left', 20)}</button><button data-act="month" data-n="1" aria-label="Next month">${ic('chevron-right', 20)}</button></div></div><div class="cal">`;
     DAYS.forEach(d => { html += `<div class="cal__h">${d[0]}</div>`; });
     const full = k => { const p = k <= t ? dayProgress(k, hs) : null; return p != null && p >= 0.999; };
     for (let i = 0; i < 42; i++) {
@@ -276,11 +295,11 @@
     html += '</div></div>';
     const from = addDays(t, -29), tot = totals(hs, from, t);
     const cur = hs.length ? Math.max(...hs.map(h => streak(h))) : 0, best = hs.length ? Math.max(...hs.map(bestStreak)) : 0;
-    html += `<div class="eyebrow"><span>Records</span><span>Last 30 days</span></div><div class="panel recs">
+    html += `<div class="eyebrow"><span>Records</span><span>Last 30 days</span></div><div class="recs">
       <div class="rec"><b>${cur}</b><span>Current streak</span></div><div class="rec"><b>${best}</b><span>Best streak</span></div>
       <div class="rec"><b>${tot.comp}</b><span>Completed</span></div><div class="rec"><b>${tot.sched ? Math.round(tot.comp / tot.sched * 100) : 0}%</b><span>Success rate</span></div></div>`;
     const monday = addDays(t, -dow(t));
-    html += `<div class="eyebrow"><span>This week</span></div><div class="panel card"><div class="wk"><div></div>${DAYS.map(d => `<div class="h">${d[0]}</div>`).join('')}`;
+    html += `<div class="block"><div class="block__t"><span>This week</span></div><div class="wk"><div></div>${DAYS.map(d => `<div class="h">${d[0]}</div>`).join('')}`;
     if (!live.length) html += `<div class="n" style="grid-column:1/-1;color:var(--text-2)">No habits yet.</div>`;
     live.forEach(h => {
       html += `<div class="n">${ic(h.icon, 16)}${esc(h.name)}</div>`;
@@ -299,9 +318,9 @@
     const live = state.habits.filter(h => !h.archived);
     const best = live.length ? Math.max(...live.map(bestStreak)) : 0;
     const total = live.reduce((a, h) => a + completions(h), 0);
-    let html = `<div class="lt-row"><h1 class="lt">Achievements</h1></div><div class="eyebrow"><span>Longest streak</span><span>${best} day${best === 1 ? '' : 's'}</span></div><div class="panel badges">`;
+    let html = `<div class="top"><svg class="top__mark" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 17v30M27 17v30M37 17v30M47 17v30"/><path d="M11 44L53 20"/></svg><button class="navbtn" data-act="settings" aria-label="Settings">${ic('settings', 20)}</button></div><div class="lt-row"><div class="lt-sub">Achievements</div><h1 class="lt">${best}-day best streak</h1></div><div class="eyebrow"><span>Longest streak</span><span>${best} day${best === 1 ? '' : 's'}</span></div><div class="badges">`;
     STREAKS.forEach(n => { html += `<div class="badge${best >= n ? ' on' : ''}"><i>${ic('flame', 26)}</i>${n} days</div>`; });
-    html += `</div><div class="eyebrow"><span>Completions</span><span>${total}</span></div><div class="panel badges">`;
+    html += `</div><div class="eyebrow"><span>Completions</span><span>${total}</span></div><div class="badges">`;
     GOALS.forEach(n => { html += `<div class="badge${total >= n ? ' on' : ''}"><i>${ic('flag', 24)}</i>${n}</div>`; });
     return html + '</div>';
   }
@@ -310,13 +329,13 @@
   function renderSettings() {
     const n = state.habits.filter(h => !h.archived).length, a = state.habits.length - n;
     const row = (act, label, small, cls = '') => `<button class="row ${cls}" data-act="${act}"><span>${label}</span><small>${small || ''}</small>${ic('chevron-right', 18, 'chev')}</button>`;
-    return `<div class="lt-row"><h1 class="lt">Settings</h1></div>
-      <div class="eyebrow"><span>Data</span></div><div class="panel list">${row('export', 'Export', 'JSON file')}${row('import', 'Import', 'Replaces everything')}</div>
-      <div class="eyebrow"><span>Reminders</span></div><div class="panel list">${notifRow()}${notifState() === 'granted' ? row('notif-test', 'Send a test reminder', state.push ? 'via server' : '') : ''}${state.push ? row('push-off', 'Turn off reminders while closed', '') : ''}</div>
-      <p class="note">${notifNote()}</p>
-      <div class="eyebrow"><span>Habits</span></div><div class="panel list">${row('archived', 'Archived', a)}</div>
-      <div class="panel list" style="margin-top:22px">${row('wipe', 'Delete all data', '', 'danger')}</div>
-      <p class="note">${n} habit${n === 1 ? '' : 's'}. Everything is stored on this device only; export now and then if you care about it.</p>`;
+    return `<div class="top"><svg class="top__mark" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 17v30M27 17v30M37 17v30M47 17v30"/><path d="M11 44L53 20"/></svg><button class="navbtn" data-act="back" aria-label="Back">${ic('x', 20)}</button></div><div class="lt-row"><div class="lt-sub">Settings</div><h1 class="lt">Tally</h1></div>
+      <div class="eyebrow"><span>Data</span></div><div class="list">${row('export', 'Export', 'JSON file')}${row('import', 'Import', 'Replaces everything')}</div>
+      <div class="eyebrow"><span>Reminders</span></div><div class="list">${notifRow()}${notifState() === 'granted' ? row('notif-test', 'Send a test reminder', state.push ? 'via server' : '') : ''}${state.push ? row('push-off', 'Turn off reminders while closed', '') : ''}</div>
+      <p class="note" style="padding:0 22px">${notifNote()}</p>
+      <div class="eyebrow"><span>Habits</span></div><div class="list">${row('archived', 'Archived', a)}</div>
+      <div class="list" style="margin-top:22px">${row('wipe', 'Delete all data', '', 'danger')}</div>
+      <p class="note" style="padding:0 22px">${n} habit${n === 1 ? '' : 's'}. Everything is stored on this device only; export now and then if you care about it.</p>`;
   }
 
   // ---------- sheets ----------
@@ -429,8 +448,12 @@
       const h = state.habits.find(x => x.id === id); if (!h) { delete state.timers[id]; save(); return; }
       const sec = elapsedSec(h), tg = target(h) * 60;
       if (sec >= tg) { stopTimer(h, true); celebrate(h); return; }
-      const el = document.getElementById('el-' + id); if (el) el.textContent = el.closest('.vbar') ? fmt(sec) : fmt(sec) + ' of ' + target(h) + ' min';
-      const bar = document.getElementById('bar-' + id); if (bar) bar.style.setProperty('--p', Math.round(sec / tg * 100));
+      const el = document.getElementById('el-' + id); if (el) el.textContent = el.closest('.card__n, .vbar') ? fmt(sec) : fmt(sec) + ' of ' + target(h) + ' min';
+      const bar = document.getElementById('bar-' + id);
+      if (bar && bar.classList.contains('strokes')) {
+        const n = bar.children.length, filled = Math.min(1, sec / tg) * n, full = Math.floor(filled), part = filled - full;
+        [...bar.children].forEach((el, i) => { el.className = i < full ? 'f' : (i === full && part > 0.02 ? 'h' : ''); if (el.className === 'h') el.style.setProperty('--hp', Math.round(part * 100)); });
+      } else if (bar) bar.style.setProperty('--p', Math.round(sec / tg * 100));
       const nb = document.getElementById('nb-' + id); if (nb) nb.textContent = fmt(sec);
       const ring = document.querySelector('#chk-' + id + ' .p'); if (ring) { const len = parseFloat(ring.getAttribute('stroke-dasharray')); ring.setAttribute('stroke-dashoffset', (len * (1 - sec / tg)).toFixed(2)); }
     });
@@ -598,6 +621,8 @@
     if (el.dataset.day != null) { readDraft(); draft.days[el.dataset.day] = draft.days[el.dataset.day] ? 0 : 1; el.classList.toggle('on'); return; }
     switch (act) {
       case 'add': tplKind = 'good'; tplQuery = ''; templatesSheet(); break;
+      case 'settings': view = 'settings'; render(); break;
+      case 'back': view = 'today'; render(); break;
       case 'tpl-kind': tplKind = el.dataset.v; tplQuery = ''; templatesSheet(); break;
       case 'tpl-custom': editSheet(null); draft.kind = el.dataset.kind; draft.color = (T[el.dataset.kind] || {}).color || ''; if (draft.kind === 'todo') draft.group = 'Anytime'; renderEditSheet(true); break;
       case 'tpl': { const [si, ti] = el.dataset.i.split(':').map(Number); fromTemplate(el.dataset.kind, T[el.dataset.kind].sections[si][1][ti]); break; }

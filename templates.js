@@ -16,7 +16,7 @@ window.TEMPLATES = {
       ['Tidy up', 'sparkles', 'check', 1, '', 'Evening'], ['Call family', 'phone', 'check', 1, '', 'Evening'], ['Cook at home', 'utensils', 'check', 1, '', 'Evening'],
       ['Walk the dog', 'dog', 'check', 1, '', 'Anytime'], ['Save money', 'piggy-bank', 'check', 1, '', 'Anytime'], ['Skincare', 'sun', 'check', 1, '', 'Evening']]],
   ] },
-  health: { label: 'Health', color: '#34c759', sections: [
+  health: { label: 'Health', color: '#8fa38a', sections: [
     ['Activity', [
       ['Steps', 'footprints', 'count', 8000, 'steps', 'Anytime'], ['Run', 'activity', 'timer', 30, '', 'Morning'], ['Cycle', 'bike', 'timer', 30, '', 'Anytime'],
       ['Swim', 'activity', 'timer', 30, '', 'Anytime'], ['Ski', 'mountain-snow', 'timer', 60, '', 'Anytime'], ['Yoga', 'heart-pulse', 'timer', 20, '', 'Morning'],
@@ -26,7 +26,7 @@ window.TEMPLATES = {
       ['Sleep 8 hours', 'moon', 'count', 8, 'hours', 'Evening'], ['Weigh in', 'scale', 'check', 1, '', 'Morning'], ['Eat fruit', 'apple', 'count', 2, 'pieces', 'Anytime'],
       ['Eat vegetables', 'salad', 'count', 3, 'portions', 'Anytime'], ['Take a bath', 'bath', 'check', 1, '', 'Evening'], ['Stand up and move', 'activity', 'count', 6, 'times', 'Anytime']]],
   ] },
-  bad: { label: 'Bad', color: '#ff3b30', sections: [
+  bad: { label: 'Bad', color: '#c25f3a', sections: [
     ['Body', [
       ["Don't snack", 'candy-off', 'check', 1, '', 'Anytime'], ["Don't bite your nails", 'hand', 'check', 1, '', 'Anytime'], ["Don't smoke", 'cigarette-off', 'check', 1, '', 'Anytime'],
       ["Don't drink alcohol", 'wine-off', 'check', 1, '', 'Evening'], ['No junk food', 'ban', 'check', 1, '', 'Anytime'], ['No soda', 'glass-water', 'check', 1, '', 'Anytime'],
@@ -36,7 +36,7 @@ window.TEMPLATES = {
       ['Reduce negative self-talk', 'brain', 'check', 1, '', 'Anytime'], ['Stop overcommitting', 'calendar', 'check', 1, '', 'Anytime'], ['No doomscrolling', 'smartphone', 'check', 1, '', 'Anytime'],
       ['No phone in bed', 'smartphone', 'check', 1, '', 'Evening'], ['Less TV', 'tv', 'check', 1, '', 'Evening'], ['Less gaming', 'gamepad-2', 'check', 1, '', 'Evening']]],
   ] },
-  todo: { label: 'To-do', color: '#5856d6', sections: [
+  todo: { label: 'To-do', color: '#6d5a7a', sections: [
     ['Most popular', [
       ['File taxes', 'file-text'], ['Renew passport', 'briefcase'], ['Plan a vacation', 'plane'], ['Update passwords', 'key'], ['Print documents', 'printer'],
       ['Buy a gift', 'gift'], ['Sign up for a gym', 'dumbbell'], ['Schedule a meeting', 'calendar'], ['Set up a budget', 'wallet'], ['Update résumé', 'file-text'],
