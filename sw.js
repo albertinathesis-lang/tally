@@ -1,5 +1,5 @@
 /* Tally service worker — the app works with no network at all. */
-const CACHE = 'tally-v12';
+const CACHE = 'tally-v13';
 const FILES = ['./', './index.html', './tokens.css', './app.css', './app.js', './icons.js', './templates.js', './manifest.webmanifest',
   './icons/icon-32.png', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', e => {

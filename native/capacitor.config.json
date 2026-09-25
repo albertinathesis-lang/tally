@@ -1,5 +1,10 @@
 {
   "appId": "com.aiartlab.tally",
   "appName": "Tally",
-  "webDir": "www"
+  "webDir": "www",
+  "backgroundColor": "#c9cdc0",
+  "ios": {
+    "backgroundColor": "#c9cdc0",
+    "contentInset": "automatic"
+  }
 }

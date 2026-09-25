@@ -11,6 +11,7 @@
 
   N.tap = () => { try { H.impact({ style: 'LIGHT' }); } catch (e) {} };
   N.success = () => { try { H.notification({ type: 'SUCCESS' }); } catch (e) {} };
+  N.tick = () => { try { H.selectionStart(); H.selectionChanged(); H.selectionEnd(); } catch (e) {} };
   try { SB.setStyle({ style: 'DEFAULT' }); } catch (e) {}
 
   // permission: 'granted' | 'denied' | 'prompt'
