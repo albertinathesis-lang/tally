@@ -28,6 +28,7 @@
   const ACCENTS = ['#ef4a5e', '#3478f6', '#5e5ce6', '#af52de', '#ff9500', '#34c759', '#59c2b1', '#ff2d55', '#000000'];
   const BG_SWATCHES = ['#a2cbf8', '#f8b4c8', '#f6c8a2', '#c9f0c9', '#f9e9a2', '#c8c2f9', '#f9c2e8', '#a2e8f0', '#d6d6dc', '#f0a2a2', '#b8f0d2', '#f2d2b0', '#a8bdf0', '#e9f0a2', '#efcdae'];
   const SETTINGS = { appearance: 'auto', accent: '#ef4a5e', customBg: true, bgStart: '#a2cbf8', bgEnd: '#efcdae', sort: 'completedLast', progressView: 'grid', hideDone: false, hideFailed: false, hideSkipped: false, confetti: true, streaks: true, negStreaks: true, dayStart: 4, weekStart: 0, sounds: true, completionSound: 'default', badges: true, futureDates: false };
+  const nearest = hex => { const v = x => [1, 3, 5].map(i => parseInt(x.slice(i, i + 2), 16)); if (!/^#[0-9a-f]{6}$/i.test(hex)) return COLORS[3]; const a = v(hex); return COLORS.reduce((b, c) => { const q = v(c), d = (a[0] - q[0]) ** 2 + (a[1] - q[1]) ** 2 + (a[2] - q[2]) ** 2; return d < b[0] ? [d, c] : b; }, [Infinity, COLORS[3]])[1]; };
   let state = load();
   function load() {
     let s = {};
@@ -44,7 +45,6 @@
     });
     return s;
   }
-  const nearest = hex => { const v = x => [1, 3, 5].map(i => parseInt(x.slice(i, i + 2), 16)); if (!/^#[0-9a-f]{6}$/i.test(hex)) return COLORS[3]; const a = v(hex); return COLORS.reduce((b, c) => { const q = v(c), d = (a[0] - q[0]) ** 2 + (a[1] - q[1]) ** 2 + (a[2] - q[2]) ** 2; return d < b[0] ? [d, c] : b; }, [Infinity, COLORS[3]])[1]; };
   let schedTimer = null;
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} if (typeof syncPush === 'function') syncPush(); if (window.TALLY_NATIVE && typeof reminderList === 'function') { clearTimeout(schedTimer); schedTimer = setTimeout(() => { if (notifState() === 'granted') window.TALLY_NATIVE.schedule(reminderList()); }, 800); } }
   const uid = () => Math.random().toString(36).slice(2, 10);

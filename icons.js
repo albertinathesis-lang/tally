@@ -1,3 +1,6 @@
+/* on-screen error report (any script error shows at the top of the page, so a blank screen explains itself) */
+window.addEventListener('error', function (e) { try { var d = document.getElementById('errbox') || document.body.appendChild(Object.assign(document.createElement('pre'), { id: 'errbox', style: 'position:fixed;top:60px;left:8px;right:8px;z-index:9999;background:#300;color:#fff;font:12px/1.4 monospace;padding:8px;white-space:pre-wrap;border-radius:8px' })); d.textContent += (e.message || e) + ' @ ' + (e.filename || '').split('/').pop() + ':' + (e.lineno || '') + '\n'; } catch (x) {} });
+window.addEventListener('unhandledrejection', function (e) { try { var d = document.getElementById('errbox') || document.body.appendChild(Object.assign(document.createElement('pre'), { id: 'errbox', style: 'position:fixed;top:60px;left:8px;right:8px;z-index:9999;background:#300;color:#fff;font:12px/1.4 monospace;padding:8px;white-space:pre-wrap;border-radius:8px' })); d.textContent += 'promise: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason) + '\n'; } catch (x) {} });
 /* Lucide line icons (ISC) — inner paths on a 24 grid; drawn by app.js */
 window.ICONS = {
 "activity": "<path d=\"M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2\" />",
