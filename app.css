@@ -3,14 +3,10 @@
 :root {
   --ground: #c9cdc0; --card: #d7dace; --paper: #e8e9e2; --mustard: #d9b83e; --olive: #3a4238; --olive-2: #2c332b;
   --ink: #1f2420; --ink-2: #4b514a; --ink-3: #737a71; --ink-4: #9aa097; --line: rgba(0,0,0,.14); --line-2: rgba(0,0,0,.08);
-  --rust: #c25f3a; --sage: #8fa38a;
+  --rust: #c25f3a; --sage: #8fa38a; --mustard-2: #a8891a;
   --ease-spring: cubic-bezier(0.32, 0.72, 0, 1); --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
   --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); --bar-h: 72px;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
-}
-@media (prefers-color-scheme: dark) {
-  :root { --ground: #1b1f1a; --card: #262c25; --paper: #2f362e; --olive: #3f4a3d; --olive-2: #333c31;
-    --ink: #e8e9e2; --ink-2: #c3c7bd; --ink-3: #8f968c; --ink-4: #6b7268; --line: rgba(255,255,255,.14); --line-2: rgba(255,255,255,.08); }
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html { font-optical-sizing: auto; }
@@ -57,20 +53,18 @@ input, select { font: inherit; color: inherit; }
 .eyebrow { display: flex; justify-content: space-between; align-items: center; padding: 14px 22px 8px; font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
 
 /* ---- habit card ---- */
-.card { position: relative; padding: 12px 22px 12px; border-top: 1px solid var(--line); background: var(--card); color: var(--ink); --fg: var(--ink); --fg-2: var(--ink-2); --fg-3: var(--ink-3); --stroke: var(--olive); }
-.card.is-run { background: var(--mustard); color: #1f2420; --fg: #1f2420; --fg-2: #4b4a33; --fg-3: #6b6940; --stroke: #3a4238; }
-.card.is-tinted:not(.is-run) { background: var(--hc); }
-.card.is-tinted.on-dark:not(.is-run) { color: var(--paper); --fg: var(--paper); --fg-2: rgba(232,233,226,.72); --fg-3: rgba(232,233,226,.58); --stroke: var(--paper); }
-.card.is-done:not(.is-tinted):not(.is-run) { background: var(--olive); color: var(--paper); --fg: var(--paper); --fg-2: rgba(232,233,226,.72); --fg-3: rgba(232,233,226,.58); --stroke: var(--paper); }
+/* cards sit flat on the ground; the habit's colour goes on its name, icon,
+   control, timer and strokes — not on a tinted box */
+.card { position: relative; padding: 12px 22px 12px; border-top: 1px solid var(--line); background: transparent; color: var(--ink); --fg: var(--ink); --fg-2: var(--ink-2); --fg-3: var(--ink-3); --stroke: var(--olive); }
+.card.is-tinted { --fg: var(--hc); --stroke: var(--hc); }
+.card.is-run:not(.is-tinted) { --fg: var(--mustard-2); --stroke: var(--mustard-2); }
+.card.is-done:not(.is-tinted) { --fg: var(--olive); --stroke: var(--olive); }
 .card__head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .card__name { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; flex: 1; min-width: 0; color: var(--fg); }
 .card__name span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card__name .ic { color: var(--fg); }
 .ctl { width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid var(--fg); display: grid; place-items: center; color: var(--fg); flex: none; position: relative; }
-.ctl.on { background: var(--fg); color: var(--card); }
-.card.is-run .ctl.on, .card.is-done:not(.is-tinted) .ctl.on { color: var(--olive); }
-.card.is-tinted .ctl.on { color: var(--hc); }
-.card.is-run .ctl.on { color: var(--mustard); }
+.ctl.on { background: var(--fg); color: var(--ground); }
 .ctl.run { border-color: transparent; }
 .ctl.run > svg { position: absolute; inset: 0; } .ctl.run .t { stroke: color-mix(in srgb, var(--fg) 25%, transparent); } .ctl.run .p { stroke: var(--fg); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
 .ctl i { display: grid; place-items: center; }
@@ -130,7 +124,7 @@ input, select { font: inherit; color: inherit; }
 .row__m { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
 .chev { color: var(--ink-4); flex: none; }
 .row.tpl[style] .row__lead { background: var(--hc); border-color: transparent; color: #1f2420; }
-.row.tpl[style="--hc:#3a4238"] .row__lead, .row.tpl[style="--hc:#6d5a7a"] .row__lead, .row.tpl[style="--hc:#4f8a86"] .row__lead { color: var(--paper); }
+.row.tpl[style] .row__lead { color: var(--paper); }
 .form .frow { display: flex; align-items: center; gap: 12px; padding: 14px 0; min-height: 52px; border-bottom: 1px solid var(--line-2); }
 .form label { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); flex: none; width: 84px; }
 .form input[type=text], .form input[type=number], .form input[type=time] { flex: 1; min-width: 0; border: 0; background: transparent; font-size: 17px; padding: 4px 0; outline: none; text-align: right; -webkit-appearance: none; appearance: none; color: var(--ink); }
@@ -231,15 +225,6 @@ input, select { font: inherit; color: inherit; }
 .frow--col:has(.istrip) { position: relative; }
 .frow--col:has(.istrip)::after { content: ''; position: absolute; left: 50%; bottom: 0; width: 14px; height: 2px; margin-left: -7px; background: var(--ink); }
 
-/* ---- colour line ---- */
-.cline { display: flex; align-items: center; gap: 12px; }
-.cnone { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--line); color: var(--ink-3); display: grid; place-items: center; flex: none; }
-.cnone.on { border-color: var(--ink); color: var(--ink); }
-.cline__track { flex: 1; height: 34px; display: flex; align-items: center; }
-.cline__track input[type=range] { width: 100%; height: 6px; margin: 0; -webkit-appearance: none; appearance: none; background: linear-gradient(to right, #b55a52, #b8894b, #a8a44a, #6f9f68, #4f8a86, #5a7aa6, #7f67a6, #a55c8c, #b55a52); border-radius: 3px; outline: none; }
-.cline__track input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px; height: 30px; border-radius: 50%; background: var(--knob, transparent); border: 2px solid var(--ink); box-shadow: inset 0 0 0 2px var(--paper); }
-.cline__track input[type=range]::-moz-range-thumb { width: 30px; height: 30px; border-radius: 50%; background: var(--knob, transparent); border: 2px solid var(--ink); }
-
 /* ---- sliding toggle ---- */
 .toggle { position: relative; display: flex; height: 40px; border: 1.5px solid var(--ink); }
 .toggle button { position: relative; z-index: 1; flex: 1; font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); text-align: center; transition: color .25s; }
@@ -248,9 +233,11 @@ input, select { font: inherit; color: inherit; }
 
 /* ---- reminder: the time always shown, in a numeral face, with a switch ---- */
 .rem { justify-content: space-between; }
-.rem__time { flex: 1; display: flex; justify-content: flex-end; }
-.rem__time input[type=time] { font-family: ui-monospace, "SF Mono", Menlo, "DM Mono", monospace; font-size: 30px; font-weight: 300; letter-spacing: -0.02em; text-align: right; padding: 0; width: auto; transition: opacity .2s; }
-.rem__time.off input[type=time] { opacity: .3; }
+.rem__time { flex: 1; display: flex; justify-content: flex-end; align-items: baseline; gap: 2px; font-family: ui-monospace, "SF Mono", Menlo, "DM Mono", monospace; font-size: 34px; font-weight: 300; letter-spacing: -0.02em; line-height: 1; touch-action: none; user-select: none; -webkit-user-select: none; cursor: ew-resize; transition: opacity .2s; position: relative; padding-right: 14px; }
+.rem__time b { font-weight: 300; padding: 6px 2px; border-bottom: 1.5px solid transparent; transition: border-color .2s; }
+.rem__time.drag b { border-bottom-color: var(--ink); }
+.rem__time small { position: absolute; right: 14px; bottom: -6px; font-family: var(--font); font-size: 9px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); }
+.rem__time.off { opacity: .3; }
 .switch { position: relative; width: 50px; height: 30px; flex: none; }
 .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; }
 .switch i { position: absolute; inset: 0; border: 1.5px solid var(--ink); border-radius: 15px; transition: background .2s; }

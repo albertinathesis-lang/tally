@@ -20,20 +20,9 @@
   const GROUPS = ['Morning', 'Afternoon', 'Evening', 'Anytime'];
   const KINDS = [['good', 'Good'], ['health', 'Health'], ['bad', 'Bad'], ['todo', 'To-do']];
   const KIND_ICON = { good: 'circle-check', health: 'heart-pulse', bad: 'ban', todo: 'list-todo' };
-  const COLORS = ['#d9b83e', '#c25f3a', '#8fa38a', '#b97a56', '#c9b58f', '#4f8a86', '#6d5a7a', '#5c6b7a', '#3a4238'];
-  // the colour line: a hue, muted to sit in the palette
-  function hueHex(h) {
-    const S = 0.42, L = 0.50, c = (1 - Math.abs(2 * L - 1)) * S, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = L - c / 2;
-    let [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
-    return '#' + [r, g, b].map(v => Math.round((v + m) * 255).toString(16).padStart(2, '0')).join('');
-  }
-  function hexHue(hex) {
-    const r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
-    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min; if (!d) return 0;
-    let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4; h = Math.round(h * 60); return h < 0 ? h + 360 : h;
-  }
-  const isDarkColor = hex => { if (!hex) return false; const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return (0.299 * r + 0.587 * g + 0.114 * b) < 150; };
-  const OLD_COLORS = { '#ff3b30': '#c25f3a', '#ff9500': '#b97a56', '#ffcc00': '#d9b83e', '#34c759': '#8fa38a', '#00c7be': '#4f8a86', '#007aff': '#5c6b7a', '#5856d6': '#6d5a7a', '#af52de': '#6d5a7a', '#ff2d55': '#c25f3a' };
+  const COLORS = ['#b5951c', '#c25f3a', '#5e7a58', '#b97a56', '#3f7a76', '#5c6b7a', '#6d5a7a', '#8c3f4a', '#3a4238'];
+  const nearestColor = hex => { const v = x => [1, 3, 5].map(i => parseInt(x.slice(i, i + 2), 16)); if (!/^#[0-9a-f]{6}$/i.test(hex)) return ''; const a = v(hex); return COLORS.reduce((best, c) => { const b = v(c), d = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2; return d < best[0] ? [d, c] : best; }, [Infinity, COLORS[0]])[1]; };
+  const OLD_COLORS = { '#ff3b30': '#c25f3a', '#ff9500': '#b97a56', '#ffcc00': '#b5951c', '#34c759': '#5e7a58', '#00c7be': '#3f7a76', '#007aff': '#5c6b7a', '#5856d6': '#6d5a7a', '#af52de': '#6d5a7a', '#ff2d55': '#c25f3a', '#d9b83e': '#b5951c', '#8fa38a': '#5e7a58', '#c9b58f': '#b97a56', '#4f8a86': '#3f7a76' };
   const T = window.TEMPLATES || {};
   const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const STREAKS = [2, 5, 7, 14, 30, 60, 90, 180, 365];
@@ -45,7 +34,7 @@
     try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
     if (!s || !s.habits) return { habits: [], log: {}, timers: {} };
     s.timers = s.timers || {};
-    s.habits.forEach(h => { if (!I[h.icon]) h.icon = EMOJI_MAP[h.icon] || 'circle-check'; if (!h.kind) h.kind = 'good'; if (h.color == null) h.color = ''; if (h.color && OLD_COLORS[h.color]) h.color = OLD_COLORS[h.color]; });   // v1 emoji -> line icon; old palette -> muted
+    s.habits.forEach(h => { if (!I[h.icon]) h.icon = EMOJI_MAP[h.icon] || 'circle-check'; if (!h.kind) h.kind = 'good'; if (h.color == null) h.color = ''; if (h.color && OLD_COLORS[h.color]) h.color = OLD_COLORS[h.color]; if (h.color && !COLORS.includes(h.color)) h.color = nearestColor(h.color); });   // v1 emoji -> line icon; old palette -> muted
     return s;
   }
   let schedTimer = null;
@@ -215,8 +204,7 @@
     if (h.kind === 'bad' && h.type === 'check') sub = 'Avoid · ' + sub.toLowerCase();
     sub += run ? ' · running' : isDone ? ' · done' : '';
     if (h.reminder) sub += ' · ' + h.reminder;
-    const dark = isDarkColor(h.color);
-    return `<section class="card${run ? ' is-run' : ''}${isDone ? ' is-done' : ''}${h.color ? ' is-tinted' : ''}${dark ? ' on-dark' : ''}"${h.color ? ` style="--hc:${h.color}"` : ''}>
+    return `<section class="card${run ? ' is-run' : ''}${isDone ? ' is-done' : ''}${h.color ? ' is-tinted' : ''}"${h.color ? ` style="--hc:${h.color}"` : ''}>
       <div class="card__head"><button class="card__name" data-act="edit" data-id="${h.id}">${ic(h.icon, 18)}<span>${esc(h.name)}</span></button>${ctl}</div>
       <button class="card__body" data-act="edit" data-id="${h.id}">${stats}<div class="strokes${stats ? '' : ' s'}" id="bar-${h.id}">${strokes}</div>
       <div class="card__sub"><span>${sub}</span>${s ? `<span class="streak">${ic('flame', 11)}${s}-day streak</span>` : ''}</div></button>
@@ -379,23 +367,23 @@
   function renderEditSheet(first) {
     const isNew = draft._new;
     const toggle = (name, opts) => { const i = Math.max(0, opts.findIndex(o => o[0] === draft[name])); return `<div class="toggle" style="--n:${opts.length};--i:${i}"><i class="toggle__thumb"></i>${opts.map(([v, l]) => `<button class="${v === draft[name] ? 'on' : ''}" data-set="${name}" data-v="${v}">${l}</button>`).join('')}</div>`; };
-    const hue = draft.color ? hexHue(draft.color) : 200;
     const rem = draft.reminder || draft._time || '09:00';
     openSheet(`<h2 class="sheet__t"><span>${isNew ? 'New habit' : 'Edit habit'}</span><button class="navbtn" data-act="close" aria-label="Close">${ic('x', 22)}</button></h2>
       <div class="form">
         <div class="frow"><label for="f-name">Name</label><input type="text" id="f-name" placeholder="Meditate" value="${esc(draft.name)}" autocomplete="off" autocapitalize="sentences"></div>
         <div class="frow frow--col"><label>Icon</label><div class="istrip" id="istrip"><div class="istrip__pad"></div>${HABIT_ICONS.map(n => `<button class="iopt${n === draft.icon ? ' on' : ''}" data-icon="${n}" aria-label="${n}">${ic(n, 22)}</button>`).join('')}<div class="istrip__pad"></div></div></div>
-        <div class="frow frow--col"><label>Colour</label><div class="cline"><button class="cnone${draft.color ? '' : ' on'}" data-set="color" data-v="" aria-label="No colour">${ic('circle-slash', 16)}</button><div class="cline__track"><input type="range" id="f-hue" min="0" max="359" value="${hue}" style="--knob:${draft.color || 'transparent'}" aria-label="Colour"></div></div></div>
+        <div class="frow frow--col"><label>Colour</label><div class="swatches"><button class="swatch none${draft.color ? '' : ' on'}" data-set="color" data-v="" aria-label="No colour">${ic('circle-slash', 16)}</button>${COLORS.map(c => `<button class="swatch${c === draft.color ? ' on' : ''}" style="--c:${c}" data-set="color" data-v="${c}" aria-label="${c}"></button>`).join('')}</div></div>
         ${draft.kind === 'todo' ? '' : `<div class="frow frow--col"><label>When</label>${toggle('group', GROUPS.map(g => [g, g]))}</div>`}
         <div class="frow frow--col"><label>Type</label>${toggle('type', [['check', 'Check'], ['count', 'Count'], ['timer', 'Timer']])}</div>
         <div id="f-target"></div>
-        <div class="frow rem"><label>Reminder</label><div class="rem__time${draft.reminder ? '' : ' off'}"><input type="time" id="f-r" value="${rem}" aria-label="Reminder time"></div><label class="switch"><input type="checkbox" id="f-ron" ${draft.reminder ? 'checked' : ''}><i></i></label></div>
+        <div class="frow rem"><label>Reminder</label><div class="rem__time${draft.reminder ? '' : ' off'}" id="f-r" data-v="${rem}" role="slider" aria-label="Reminder time" aria-valuetext="${rem}"><b class="hh" data-part="h">${rem.slice(0, 2)}</b><span>:</span><b class="mm" data-part="m">${rem.slice(3)}</b><small>drag</small></div><label class="switch"><input type="checkbox" id="f-ron" ${draft.reminder ? 'checked' : ''}><i></i></label></div>
         ${draft.kind === 'todo' ? '' : `<div class="frow frow--col"><label>Days</label><div class="days">${DAYS.map((d, i) => `<button class="dayb${draft.days[i] ? ' on' : ''}" data-day="${i}" aria-label="${d}">${d[0]}</button>`).join('')}</div></div>`}
       </div>
       <button class="btn" data-act="save">${isNew ? (draft.kind === 'todo' ? 'Add to-do' : 'Add habit') : 'Save'}</button>
       ${isNew ? '' : `<button class="btn btn--2" data-act="archive">${draft.archived ? 'Restore' : 'Archive'}</button><button class="btn btn--danger" data-act="delete">Delete habit and history</button>`}`);
     renderTarget();
     iconStrip();
+    timeDrag();
     if (first && isNew && !draft.name) setTimeout(() => $('#f-name').focus(), 420);
   }
   // the icon strip: drag it, the centred icon is the pick, with a tick per icon
@@ -418,6 +406,29 @@
     }, { passive: true });
     strip.addEventListener('pointerdown', () => { quiet = false; ensureAudio(); });
     opts.forEach(o => o.addEventListener('click', () => { o.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }));
+  }
+  // the reminder time: drag the hours or the minutes sideways, a tick per step
+  function timeDrag() {
+    const el = $('#f-r'); if (!el) return;
+    const hh = el.querySelector('.hh'), mm = el.querySelector('.mm');
+    const get = () => el.dataset.v.split(':').map(Number);
+    const set = (h, m) => { h = (h + 24) % 24; m = (m + 60) % 60; el.dataset.v = pad(h) + ':' + pad(m); hh.textContent = pad(h); mm.textContent = pad(m); el.setAttribute('aria-valuetext', el.dataset.v); };
+    let part = null, x0 = 0, h0 = 0, m0 = 0, last = 0;
+    const STEP = 14;                                   // px per hour / per five minutes
+    el.addEventListener('pointerdown', e => {
+      const b = e.target.closest('[data-part]'); part = b ? b.dataset.part : (e.clientX < el.getBoundingClientRect().left + el.clientWidth / 2 ? 'h' : 'm');
+      [h0, m0] = get(); x0 = e.clientX; last = 0; el.setPointerCapture(e.pointerId); el.classList.add('drag'); ensureAudio();
+      const on = $('#f-ron'); if (on && !on.checked) { on.checked = true; el.classList.remove('off'); }
+    });
+    el.addEventListener('pointermove', e => {
+      if (!part) return;
+      const n = Math.round((e.clientX - x0) / STEP);
+      if (n === last) return; last = n;
+      if (part === 'h') set(h0 + n, m0); else set(h0, m0 + n * 5);
+      clickSound();
+    });
+    const end = () => { part = null; el.classList.remove('drag'); };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
   }
   // the tick: a short click through Web Audio, and the selection haptic on the phone
   let actx = null;
@@ -463,7 +474,7 @@
     const n = $('#f-name'); if (n) draft.name = n.value.trim();
     const t = $('#f-t'); if (t) draft.target = Math.max(1, parseInt(t.value, 10) || 1);
     const u = $('#f-u'); if (u) draft.unit = u.value.trim();
-    const r = $('#f-r'), on = $('#f-ron'); if (r) { draft._time = r.value || '09:00'; draft.reminder = on && on.checked && r.value ? r.value : ''; }
+    const r = $('#f-r'), on = $('#f-ron'); if (r) { draft._time = r.dataset.v || '09:00'; draft.reminder = on && on.checked ? draft._time : ''; }
   }
 
   // ---------- inline timers ----------
@@ -664,7 +675,7 @@
     const tab = e.target.closest('.tab'); if (tab) { if (performance.now() < tabSuppress) return; view = tab.dataset.view; render(); return; }
     const el = e.target.closest('[data-act],[data-set],[data-day]'); if (!el) return;
     const act = el.dataset.act, id = el.dataset.id, h = id && state.habits.find(x => x.id === id);
-    if (el.dataset.set === 'color') { readDraft(); draft.color = ''; el.classList.add('on'); const r = $('#f-hue'); if (r) r.style.setProperty('--knob', 'transparent'); return; }
+    if (el.dataset.set === 'color') { readDraft(); draft.color = el.dataset.v; document.querySelectorAll('.swatch').forEach(b => b.classList.toggle('on', b === el)); if (NATIVE && NATIVE.tap) NATIVE.tap(); return; }
     if (el.dataset.set) { readDraft(); draft[el.dataset.set] = el.dataset.v; if (el.dataset.set === 'type') draft.target = draft.type === 'timer' ? 10 : 1; if (NATIVE && NATIVE.tap) NATIVE.tap(); renderEditSheet(false); return; }
     if (el.dataset.day != null) { readDraft(); draft.days[el.dataset.day] = draft.days[el.dataset.day] ? 0 : 1; el.classList.toggle('on'); return; }
     switch (act) {
@@ -714,7 +725,6 @@
   let qTimer = null;
   document.addEventListener('input', e => {
     if (e.target.id === 'tpl-q') { clearTimeout(qTimer); const v = e.target.value; qTimer = setTimeout(() => { tplQuery = v; templatesSheet(); }, 250); }
-    if (e.target.id === 'f-hue') { draft.color = hueHex(Number(e.target.value)); e.target.style.setProperty('--knob', draft.color); const none = document.querySelector('.cnone'); if (none) none.classList.remove('on'); }
     if (e.target.id === 'f-ron') { const t = document.querySelector('.rem__time'); if (t) t.classList.toggle('off', !e.target.checked); }
   });
 

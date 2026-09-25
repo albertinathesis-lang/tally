@@ -16,7 +16,7 @@ window.TEMPLATES = {
       ['Tidy up', 'sparkles', 'check', 1, '', 'Evening'], ['Call family', 'phone', 'check', 1, '', 'Evening'], ['Cook at home', 'utensils', 'check', 1, '', 'Evening'],
       ['Walk the dog', 'dog', 'check', 1, '', 'Anytime'], ['Save money', 'piggy-bank', 'check', 1, '', 'Anytime'], ['Skincare', 'sun', 'check', 1, '', 'Evening']]],
   ] },
-  health: { label: 'Health', color: '#8fa38a', sections: [
+  health: { label: 'Health', color: '#5e7a58', sections: [
     ['Activity', [
       ['Steps', 'footprints', 'count', 8000, 'steps', 'Anytime'], ['Run', 'activity', 'timer', 30, '', 'Morning'], ['Cycle', 'bike', 'timer', 30, '', 'Anytime'],
       ['Swim', 'activity', 'timer', 30, '', 'Anytime'], ['Ski', 'mountain-snow', 'timer', 60, '', 'Anytime'], ['Yoga', 'heart-pulse', 'timer', 20, '', 'Morning'],
