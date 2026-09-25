@@ -184,6 +184,22 @@
     if (Object.keys(state.timers).length) ensureTick();
     if (isToday) setupWeekSwipe(layer);
     if (top && top.p === 'reorder') setupReorder();
+    miniBarOnScroll(layer);
+    $('#tabbar').classList.remove('mini');
+  }
+  // iOS 26: while scrolling down the tab bar folds into a small round button
+  // with the active tab's icon; scrolling up (or tapping it) brings it back
+  function miniBarOnScroll(layer) {
+    let last = layer.scrollTop, raf = null;
+    layer.addEventListener('scroll', () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = null; const y = layer.scrollTop, dy = y - last; last = y;
+        const bar = $('#tabbar'); if (bar.hidden) return;
+        if (y < 40 || dy < -6) bar.classList.remove('mini');
+        else if (dy > 6 && y > 60) bar.classList.add('mini');
+      });
+    }, { passive: true });
   }
   const TABS = [['today', 'list-checks', 'Habits'], ['stats', 'chart-no-axes-column', 'Statistics'], ['sharing', 'users', 'Sharing'], ['settings', 'settings', 'Settings']];
   function renderTabs() {
@@ -631,7 +647,7 @@
     html += `<h3>Progress</h3><div class="sblk" style="display:block">${progressChart(hs, from, t)}</div>`;
     if (hs.length > 1) html += `<h3>Comparison</h3><div class="sblk" style="display:block">${comparisonChart(hs, from, t)}<div class="legend">${hs.map(h => `<span><i style="background:${h.color}"></i>${h.emoji} ${esc(h.name)}</span>`).join('')}</div></div>`;
     html += `<h3>Performance</h3><div class="sblk" style="display:block">${hs.map(h => { const tt = totals([h], from, t), p = tt.sched ? Math.round(tt.comp / tt.sched * 100) : 0; return `<div class="perf"><span class="card__ico" style="width:24px;height:24px;font-size:18px">${emojiOf(h)}</span><span>${esc(h.name)}<small style="display:block;font-size:12px;color:var(--ink-3)">${tt.comp} of ${tt.sched}</small></span><span class="pill${p < 50 ? ' bad' : ''}">${p}%</span></div>`; }).join('') || '<p class="note">No habits yet.</p>'}</div>`;
-    html += `<div style="height:40px"></div></div><button class="fab" data-act="none" aria-label="Statistics">${ic('chart-no-axes-column', 22)}</button>`;
+    html += `<div style="height:40px"></div></div>`;
     return html;
   }
   function series(hs, from, to) { const pts = []; let sched = 0, comp = 0; for (let k = from; k <= to; k = addDays(k, 1)) { hs.forEach(h => { if (scheduled(h, k)) { sched++; if (done(h, k)) comp++; } }); pts.push([k, sched ? comp / sched : 0]); } return pts; }
@@ -689,7 +705,7 @@
       <h3>Help & Support</h3><div class="grp">
         <a class="row" href="mailto:hello@aiartlab.org?subject=Tally" style="text-decoration:none"><span class="row__ico" style="background:#007aff">${ic('circle-help', 16)}</span><span class="row__t">Get Support</span>${ic('chevron-right', 18, 'chev')}</a>
         <button class="row" data-act="share-app" style="color:var(--green)"><span class="row__ico" style="background:#34c759">${ic('share', 16)}</span><span class="row__t">Share App</span></button></div>
-      <p class="note">Current version: 0.9 · ${n} habit${n === 1 ? '' : 's'}, stored on this device only.</p><div style="height:40px"></div></div><button class="fab" data-act="none" aria-label="Settings">${ic('settings', 22)}</button>`;
+      <p class="note">Current version: 0.9 · ${n} habit${n === 1 ? '' : 's'}, stored on this device only.</p><div style="height:40px"></div></div>`;
   }
   function renderAchievements() {
     const all = live(), best = all.length ? Math.max(...all.map(bestStreak)) : 0;
@@ -994,7 +1010,7 @@
     if (performance.now() < pressSuppress && !e.target.closest('.ctx')) { e.preventDefault(); return; }
     if (ctxEl && !e.target.closest('.ctx__panel')) { closeCtx(); if (!e.target.closest('[data-act]')) return; }
     else if (ctxEl && e.target.closest('.ctx__panel')) closeCtx();
-    const tab = e.target.closest('.tab'); if (tab) { if (performance.now() < tabSuppress) return; if (view === tab.dataset.view && !stack.length) return; view = tab.dataset.view; stack = []; render('fade'); return; }
+    const tab = e.target.closest('.tab'); if (tab) { const bar = $('#tabbar'); if (bar.classList.contains('mini')) { bar.classList.remove('mini'); return; } if (performance.now() < tabSuppress) return; if (view === tab.dataset.view && !stack.length) return; view = tab.dataset.view; stack = []; render('fade'); return; }
     const el = e.target.closest('[data-act]'); if (!el) return;
     const act = el.dataset.act, id = el.dataset.id, h = id && state.habits.find(x => x.id === id);
     switch (act) {
