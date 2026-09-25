@@ -1,0 +1,71 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tally — editorial</title>
+<style>
+:root { --ground:#c9cdc0; --ink:#1f2420; --ink-2:#4b514a; --ink-3:#737a71; --card:#d7dace; --mustard:#d9b83e; --olive:#3a4238; --olive-2:#2c332b; --rust:#c25f3a; --sage:#8fa38a; --paper:#e8e9e2; }
+* { box-sizing:border-box } html,body{margin:0;background:var(--ground);color:var(--ink);font-family:-apple-system,"SF Pro Text",Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.app{min-height:100dvh;padding:58px 0 110px}
+.top{display:flex;justify-content:space-between;align-items:center;padding:0 22px 8px}
+.avatar{width:38px;height:38px;border-radius:50%;background:var(--olive);display:grid;place-items:center;color:var(--card);font-weight:700;font-size:13px}
+.dots{color:var(--ink-3);letter-spacing:2px;font-size:18px}
+.title{padding:22px 22px 26px;font-size:30px;line-height:1.08;letter-spacing:-0.03em;font-weight:500}
+.title b{display:block;font-weight:700;color:var(--ink)} .title span{color:var(--ink-3);font-weight:500}
+.week{display:flex;justify-content:space-between;padding:0 22px 22px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.week i{display:flex;flex-direction:column;align-items:center;gap:6px;font-style:normal}
+.week i b{font-size:14px;letter-spacing:0;color:var(--ink-2);font-weight:500} .week i.on b{color:var(--ink);font-weight:700;border-bottom:2px solid var(--ink);padding-bottom:2px}
+.card{padding:20px 22px 22px;border-top:1px solid rgba(0,0,0,.14)}
+.card.y{background:var(--mustard)} .card.d{background:var(--olive);color:var(--paper)} .card.d .lab,.card.d .n span,.card.d .dots{color:rgba(232,233,226,.62)} .card.d .sub{color:rgba(232,233,226,.72)}
+.card.p{background:var(--card)}
+.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;font-size:16px;font-weight:600;letter-spacing:-0.01em}
+.head svg{width:18px;height:18px;margin-right:8px;vertical-align:-3px}
+.stats{display:flex;justify-content:space-between;margin-bottom:16px}
+.lab{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);margin-bottom:6px}
+.n{font-size:18px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums} .n span{font-weight:400;color:var(--ink-2)}
+.r{text-align:right}
+.strokes{display:flex;gap:0;height:56px;align-items:flex-end}
+.strokes i{flex:1;height:100%;border-left:1.5px solid currentColor;opacity:.32}
+.strokes i.f{opacity:1;background:currentColor;border-left-color:transparent}
+.card.y .strokes{color:var(--olive)} .card.d .strokes{color:var(--paper)} .card.p .strokes{color:var(--olive)}
+.card.p .strokes i.f{opacity:.9}
+.sub{font-size:12px;color:var(--ink-2);margin-top:10px;display:flex;justify-content:space-between}
+.ctl{width:44px;height:44px;border-radius:50%;border:1.5px solid currentColor;display:grid;place-items:center;opacity:.85}
+.ctl.done{background:currentColor} .ctl.done svg{color:var(--mustard)}
+.card.d .ctl.done svg{color:var(--olive)}
+.bottom{position:fixed;left:0;right:0;bottom:0;height:96px;background:var(--ground);border-top:1px solid rgba(0,0,0,.14);display:flex;align-items:center;justify-content:space-between;padding:0 22px 22px}
+.bottom .tabs{display:flex;gap:22px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)} .bottom .tabs b{color:var(--ink);font-weight:600}
+.plus{width:48px;height:48px;border:1.5px solid var(--ink);border-radius:50%;display:grid;place-items:center;font-size:24px;font-weight:300}
+</style></head><body>
+<div class="app">
+<div class="top"><div class="avatar">V</div><div class="dots">⋮⋮⋮</div></div>
+<div class="title"><span>Friday, 25 September</span><b>3 of 6 today</b></div>
+<div class="week"><i><span>Mon</span><b>21</b></i><i><span>Tue</span><b>22</b></i><i><span>Wed</span><b>23</b></i><i><span>Thu</span><b>24</b></i><i class="on"><span>Fri</span><b>25</b></i><i><span>Sat</span><b>26</b></i><i><span>Sun</span><b>27</b></i></div>
+
+<section class="card y">
+  <div class="head"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/></svg>Yoga</span><span class="dots">··</span></div>
+  <div class="stats"><div><div class="lab">Done</div><div class="n">12<span>:40</span></div></div><div class="r"><div class="lab">Goal</div><div class="n">20<span>:00</span></div></div></div>
+  <div class="strokes">
+    <i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i>
+    <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="sub"><span>Every day · running</span><span>4-day streak</span></div>
+</section>
+
+<section class="card d">
+  <div class="head"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5S5 13 5 15a7 7 0 0 0 7 7z"/></svg>Drink water</span><span class="dots">··</span></div>
+  <div class="stats"><div><div class="lab">Done</div><div class="n">5<span> glasses</span></div></div><div class="r"><div class="lab">Goal</div><div class="n">8</div></div></div>
+  <div class="strokes"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i></div>
+  <div class="sub"><span>Every day</span><span>12-day streak</span></div>
+</section>
+
+<section class="card p">
+  <div class="head"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>Make your bed</span><span class="ctl done"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 6"/></svg></span></div>
+  <div class="strokes" style="height:34px"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></div>
+  <div class="sub"><span>Every day · done</span><span>21-day streak</span></div>
+</section>
+
+<section class="card p">
+  <div class="head"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m8.5 8.5 7 7"/><path d="M13 22H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v9"/><circle cx="12" cy="12" r="3"/></svg>Don't snack</span><span class="ctl"></span></div>
+  <div class="strokes" style="height:34px"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="sub"><span>Avoid · every day</span><span>3-day streak</span></div>
+</section>
+</div>
+<div class="bottom"><div class="tabs"><b>Habits</b><span>Stats</span><span>Awards</span></div><div class="plus">+</div></div>
+</body></html>
