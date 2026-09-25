@@ -227,21 +227,22 @@ input, select { font: inherit; color: inherit; }
 .frow--col:has(.istrip)::after { content: ''; position: absolute; left: 50%; bottom: 0; width: 14px; height: 2px; margin-left: -7px; background: var(--ink); }
 
 /* ---- sliding toggle ---- */
-.toggle { position: relative; display: flex; height: 40px; border: 1.5px solid var(--ink); }
+.toggle { position: relative; display: flex; height: 40px; border: 1.5px solid var(--ink); overflow: hidden; }
 .toggle button { position: relative; z-index: 1; flex: 1; font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); text-align: center; transition: color .25s; }
 .toggle button.on { color: var(--paper); font-weight: 700; }
 .toggle__thumb { position: absolute; top: 0; bottom: 0; left: 0; width: calc(100% / var(--n)); background: var(--ink); transform: translateX(calc(var(--i) * 100%)); transition: transform .35s var(--ease-spring); }
 
 /* ---- reminder: the time always shown, in a numeral face, with a switch ---- */
 .rem { justify-content: space-between; }
-.rem__time { flex: 1; display: flex; justify-content: flex-end; align-items: baseline; gap: 2px; font-family: ui-monospace, "SF Mono", Menlo, "DM Mono", monospace; font-size: 34px; font-weight: 300; letter-spacing: -0.02em; line-height: 1; touch-action: none; user-select: none; -webkit-user-select: none; cursor: ew-resize; transition: opacity .2s; position: relative; padding-right: 14px; }
-.rem__time b { font-weight: 300; padding: 6px 2px; border-bottom: 1.5px solid transparent; transition: border-color .2s; }
-.rem__time.drag b { border-bottom-color: var(--ink); }
-.rem__time small { position: absolute; right: 14px; bottom: -6px; font-family: var(--font); font-size: 9px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); }
+.rem__time, .num { flex: 1; display: flex; justify-content: flex-end; align-items: baseline; gap: 2px; font-family: ui-monospace, "SF Mono", Menlo, "DM Mono", monospace; font-size: 34px; font-weight: 300; letter-spacing: -0.02em; line-height: 1; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: ew-resize; transition: opacity .2s; position: relative; padding-right: 14px; }
+.rem__time b, .num b { font-weight: 300; padding: 6px 2px; border-bottom: 1.5px solid transparent; transition: border-color .2s; }
+.rem__time.drag b, .num.drag b { border-bottom-color: var(--ink); }
+.rem__time small, .num small { position: absolute; right: 14px; bottom: -6px; font-family: var(--font); font-size: 9px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); }
+.num span { font-family: var(--font); font-size: 13px; color: var(--ink-3); margin-left: 6px; }
 .rem__time.off { opacity: .3; }
 .switch { position: relative; width: 50px; height: 30px; flex: none; }
 .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; }
 .switch i { position: absolute; inset: 0; border: 1.5px solid var(--ink); border-radius: 15px; transition: background .2s; }
 .switch i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); transition: transform .25s var(--ease-spring), background .2s; }
 .switch input:checked + i { background: var(--ink); } .switch input:checked + i::after { background: var(--paper); transform: translateX(20px); }
-.form input.unit { flex: 0 0 110px; text-align: right; color: var(--ink-2); }
+.form input.unit { flex: 0 0 90px; text-align: left; color: var(--ink-2); }

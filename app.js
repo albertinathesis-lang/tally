@@ -407,28 +407,43 @@
     strip.addEventListener('pointerdown', () => { quiet = false; ensureAudio(); });
     opts.forEach(o => o.addEventListener('click', () => { o.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }));
   }
-  // the reminder time: drag the hours or the minutes sideways, a tick per step
+  // sideways drags on the numeral faces. Touch events are used on the
+  // phone (WebKit cancels pointer drags inside a scrolling sheet), pointer
+  // events elsewhere; either way the page does not scroll under the drag.
+  const STEP = 14;                                            // px per step
+  function scrub(el, onStart, onStep) {
+    let active = false, x0 = 0, last = 0, id = null;
+    const begin = (x, target) => { active = true; x0 = x; last = 0; el.classList.add('drag'); ensureAudio(); onStart(target); };
+    const move = x => { if (!active) return; const n = Math.round((x - x0) / STEP); if (n === last) return; last = n; onStep(n); clickSound(); };
+    const end = () => { active = false; el.classList.remove('drag'); };
+    el.addEventListener('touchstart', e => { begin(e.touches[0].clientX, e.target); }, { passive: true });
+    el.addEventListener('touchmove', e => { if (active) { e.preventDefault(); move(e.touches[0].clientX); } }, { passive: false });
+    el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
+    el.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') return; id = e.pointerId; try { el.setPointerCapture(id); } catch (x) {} begin(e.clientX, e.target); });
+    el.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') move(e.clientX); });
+    el.addEventListener('pointerup', e => { if (e.pointerType !== 'touch') end(); }); el.addEventListener('pointercancel', e => { if (e.pointerType !== 'touch') end(); });
+  }
+  // the reminder time: hours or minutes, whichever is under the finger
   function timeDrag() {
     const el = $('#f-r'); if (!el) return;
     const hh = el.querySelector('.hh'), mm = el.querySelector('.mm');
-    const get = () => el.dataset.v.split(':').map(Number);
     const set = (h, m) => { h = (h + 24) % 24; m = (m + 60) % 60; el.dataset.v = pad(h) + ':' + pad(m); hh.textContent = pad(h); mm.textContent = pad(m); el.setAttribute('aria-valuetext', el.dataset.v); };
-    let part = null, x0 = 0, h0 = 0, m0 = 0, last = 0;
-    const STEP = 14;                                   // px per hour / per five minutes
-    el.addEventListener('pointerdown', e => {
-      const b = e.target.closest('[data-part]'); part = b ? b.dataset.part : (e.clientX < el.getBoundingClientRect().left + el.clientWidth / 2 ? 'h' : 'm');
-      [h0, m0] = get(); x0 = e.clientX; last = 0; el.setPointerCapture(e.pointerId); el.classList.add('drag'); ensureAudio();
+    let part = 'h', h0 = 0, m0 = 0;
+    scrub(el, target => {
+      const b = target.closest && target.closest('[data-part]'); part = b ? b.dataset.part : 'h';
+      [h0, m0] = el.dataset.v.split(':').map(Number);
       const on = $('#f-ron'); if (on && !on.checked) { on.checked = true; el.classList.remove('off'); }
-    });
-    el.addEventListener('pointermove', e => {
-      if (!part) return;
-      const n = Math.round((e.clientX - x0) / STEP);
-      if (n === last) return; last = n;
-      if (part === 'h') set(h0 + n, m0); else set(h0, m0 + n * 5);
-      clickSound();
-    });
-    const end = () => { part = null; el.classList.remove('drag'); };
-    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    }, n => { if (part === 'h') set(h0 + n, m0); else set(h0, m0 + n * 5); });
+  }
+  // the goal: minutes for a timer, a count otherwise, along a ladder that
+  // is fine at the bottom and coarse higher up
+  const LADDER = { timer: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40, 45, 50, 60, 75, 90, 120, 150, 180, 240], count: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100, 150, 200, 500, 1000] };
+  function targetDrag() {
+    const el = $('#f-t'); if (!el) return;
+    const lad = LADDER[draft.type] || LADDER.count, num = el.querySelector('b');
+    let i0 = 0;
+    scrub(el, () => { const v = Number(el.dataset.v); i0 = lad.findIndex(x => x >= v); if (i0 < 0) i0 = lad.length - 1; },
+      n => { const i = Math.max(0, Math.min(lad.length - 1, i0 + n)); el.dataset.v = lad[i]; num.textContent = lad[i]; el.setAttribute('aria-valuetext', String(lad[i])); });
   }
   // the tick: a short click through Web Audio, and the selection haptic on the phone
   let actx = null;
@@ -466,13 +481,15 @@
   }
   function renderTarget() {
     const el = $('#f-target'); if (!el) return;
-    if (draft.type === 'count') el.innerHTML = `<div class="frow"><label for="f-t">Goal</label><input type="number" id="f-t" min="1" inputmode="numeric" value="${draft.target || 1}"><input type="text" id="f-u" class="unit" placeholder="glasses" value="${esc(draft.unit || '')}" aria-label="Unit"></div>`;
-    else if (draft.type === 'timer') el.innerHTML = `<div class="frow"><label for="f-t">Minutes</label><input type="number" id="f-t" min="1" inputmode="numeric" value="${draft.target || 10}"></div>`;
+    const face = (v, unit) => `<div class="num" id="f-t" data-v="${v}" role="slider" aria-label="Goal" aria-valuetext="${v}"><b>${v}</b>${unit ? `<span>${unit}</span>` : ''}<small>drag</small></div>`;
+    if (draft.type === 'count') el.innerHTML = `<div class="frow"><label>Goal</label><input type="text" id="f-u" class="unit" placeholder="glasses" value="${esc(draft.unit || '')}" aria-label="Unit">${face(draft.target || 1)}</div>`;
+    else if (draft.type === 'timer') el.innerHTML = `<div class="frow"><label>Minutes</label>${face(draft.target || 10)}</div>`;
     else el.innerHTML = '';
+    targetDrag();
   }
   function readDraft() {
     const n = $('#f-name'); if (n) draft.name = n.value.trim();
-    const t = $('#f-t'); if (t) draft.target = Math.max(1, parseInt(t.value, 10) || 1);
+    const t = $('#f-t'); if (t) draft.target = Math.max(1, parseInt(t.dataset.v, 10) || 1);
     const u = $('#f-u'); if (u) draft.unit = u.value.trim();
     const r = $('#f-r'), on = $('#f-ron'); if (r) { draft._time = r.dataset.v || '09:00'; draft.reminder = on && on.checked ? draft._time : ''; }
   }
