@@ -25,7 +25,7 @@
   const MINUTES = [10, 30, 60];
   // Grit's habit colours, measured from the screenshots where possible
   const COLORS = ['#ff3b30', '#ec9142', '#ffcc00', '#5dc461', '#59c2b1', '#4fb8c7', '#32ade6', '#3478f6', '#5e5ce6', '#af52de', '#ff2d55', '#a2845e', '#8e8e93'];
-  const ACCENTS = ['#ef4a5e', '#3478f6', '#5e5ce6', '#af52de', '#ff9500', '#34c759', '#59c2b1', '#ff2d55', '#000000'];
+  const ACCENTS = ['#ef4a5e', '#ff9500', '#ffcc00', '#34c759', '#59c2b1', '#32ade6', '#3478f6', '#5e5ce6', '#af52de', '#ff2d55'];
   const BG_SWATCHES = ['#a2cbf8', '#f8b4c8', '#f6c8a2', '#c9f0c9', '#f9e9a2', '#c8c2f9', '#f9c2e8', '#a2e8f0', '#d6d6dc', '#f0a2a2', '#b8f0d2', '#f2d2b0', '#a8bdf0', '#e9f0a2', '#efcdae'];
   const SETTINGS = { appearance: 'auto', accent: '#ef4a5e', customBg: true, bgStart: '#a2cbf8', bgEnd: '#efcdae', sort: 'completedLast', progressView: 'grid', hideDone: false, hideFailed: false, hideSkipped: false, confetti: true, streaks: true, negStreaks: true, dayStart: 4, weekStart: 0, sounds: true, completionSound: 'default', badges: true, futureDates: false };
   const nearest = hex => { const v = x => [1, 3, 5].map(i => parseInt(x.slice(i, i + 2), 16)); if (!/^#[0-9a-f]{6}$/i.test(hex)) return COLORS[3]; const a = v(hex); return COLORS.reduce((b, c) => { const q = v(c), d = (a[0] - q[0]) ** 2 + (a[1] - q[1]) ** 2 + (a[2] - q[2]) ** 2; return d < b[0] ? [d, c] : b; }, [Infinity, COLORS[3]])[1]; };
@@ -36,6 +36,7 @@
     s.habits = s.habits || []; s.log = s.log || {}; s.timers = s.timers || {}; s.status = s.status || {}; s.times = s.times || {}; s.notes = s.notes || {};
     s.groups = s.groups || []; s.vacations = s.vacations || [];
     s.settings = Object.assign({}, SETTINGS, s.settings || {});
+    if (!ACCENTS.includes(s.settings.accent)) s.settings.accent = SETTINGS.accent;   // black and other unreadable accents fall back
     s.habits.forEach(h => {
       if (!h.emoji) h.emoji = EMOJI[h.icon] || '✅';
       if (!h.kind) h.kind = 'good'; if (!h.color) h.color = COLORS[3]; if (!COLORS.includes(h.color)) h.color = nearest(h.color);
@@ -145,6 +146,7 @@
     if (dark) { r.setProperty('--bg-start', mix(s.bgStart, '#000000', .55)); r.setProperty('--bg-end', mix(s.bgEnd, '#000000', .55)); r.setProperty('--bg-mid', mix(mix(s.bgStart, s.bgEnd, .5), '#000000', .6)); }
     else { r.setProperty('--bg-start', mix(s.bgStart, '#ffffff', .15)); r.setProperty('--bg-end', mix(s.bgEnd, '#ffffff', .15)); r.setProperty('--bg-mid', mix(mix(s.bgStart, s.bgEnd, .5), '#ffffff', .35)); }
     document.body.classList.toggle('custom-bg', !!s.customBg); document.documentElement.classList.toggle('custom-bg', !!s.customBg);
+    r.setProperty('--strip-bg', s.customBg ? 'var(--bg-start)' : 'var(--sys-bg)');
     const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.content = s.customBg ? getComputedStyle(document.documentElement).getPropertyValue('--bg-start').trim() : (dark ? '#000000' : '#f2f2f7');
   }
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { applyTheme(); });

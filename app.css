@@ -85,7 +85,7 @@ html.custom-bg .layer:not(.today) { background: linear-gradient(180deg, var(--bg
 .day.is-sel .day__r svg .t { stroke: rgba(255,255,255,.3); } .day.is-sel .day__r svg .p { stroke: #fff; stroke-linecap: round; transition: stroke-dashoffset 400ms var(--ease-out); }
 .day.is-future .day__r, .day.is-future .day__n { color: var(--ink-4); }
 .day.is-sel.is-future .day__r, .day.is-sel.is-future .day__n { color: #fff; }
-.week-wrap { position: relative; z-index: 39; height: calc(var(--sat) + 136px); overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; display: flex; will-change: transform; -webkit-mask-image: linear-gradient(#000 88%, transparent); mask-image: linear-gradient(#000 88%, transparent); background: color-mix(in srgb, var(--bg-start) 70%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.week-wrap { position: relative; z-index: 39; height: calc(var(--sat) + 136px); overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; display: flex; will-change: transform; -webkit-mask-image: linear-gradient(#000 calc(100% - 3px), transparent); mask-image: linear-gradient(#000 calc(100% - 3px), transparent); background: color-mix(in srgb, var(--strip-bg, var(--bg-start)) 70%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
 .week-wrap::-webkit-scrollbar { display: none; }
 .week-wrap .week { flex: 0 0 100%; scroll-snap-align: start; }
 .topblock { height: calc(var(--sat) + 136px); }
