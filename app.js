@@ -198,8 +198,8 @@
     let ctl;
     if (h.type === 'check') ctl = `<button class="ctl${isDone ? ' on' : ''}" data-act="toggle" data-id="${h.id}" aria-label="${isDone ? 'Undo' : 'Done'}"><i>${ic('check', 18)}</i></button>`;
     else if (h.type === 'count') ctl = `<div class="stepper">${v > 0 ? `<button class="ctl" data-act="dec" data-id="${h.id}" aria-label="Less"><i>${ic('minus', 16)}</i></button>` : ''}<button class="ctl${isDone ? ' on' : ''}" data-act="inc" data-id="${h.id}" aria-label="More"><i>${ic(isDone ? 'check' : 'plus', 16)}</i></button></div>`;
-    else if (run) ctl = `<button class="ctl run" id="chk-${h.id}" data-act="timer" data-id="${h.id}" aria-label="Pause">${ring(44, 2.5, p)}<i>${ic('pause', 16)}</i></button>`;
-    else ctl = `<button class="ctl${isDone ? ' on' : ''}" data-act="timer" data-id="${h.id}" aria-label="Start"><i>${ic(isDone ? 'check' : 'play', 16)}</i></button>`;
+    else if (run) ctl = `<button class="ctl run" id="chk-${h.id}" data-act="timer" data-id="${h.id}" aria-label="Pause">${ring(38, 2, p)}<i>${ic('pause', 16)}</i></button>`;
+    else ctl = `<button class="ctl${isDone ? ' on' : ''}" data-act="timer" data-id="${h.id}" aria-label="Start"><i>${ic(isDone ? 'check' : 'play', 16, isDone ? '' : 'ic-play')}</i></button>`;
     let sub = h.kind === 'todo' ? 'To-do' : h.days.every(Boolean) ? 'Every day' : h.days.filter(Boolean).length + ' days a week';
     if (h.kind === 'bad' && h.type === 'check') sub = 'Avoid · ' + sub.toLowerCase();
     sub += run ? ' · running' : isDone ? ' · done' : '';

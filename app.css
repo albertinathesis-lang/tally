@@ -66,8 +66,9 @@ input, select { font: inherit; color: inherit; }
 .ctl { width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid var(--fg); display: grid; place-items: center; color: var(--fg); flex: none; position: relative; }
 .ctl.on { background: var(--fg); color: var(--ground); }
 .ctl.run { border-color: transparent; }
-.ctl.run > svg { position: absolute; inset: 0; } .ctl.run .t { stroke: color-mix(in srgb, var(--fg) 25%, transparent); } .ctl.run .p { stroke: var(--fg); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
-.ctl i { display: grid; place-items: center; }
+.ctl.run > svg { position: absolute; inset: -1.5px; width: 38px; height: 38px; } .ctl.run .t { stroke: color-mix(in srgb, var(--fg) 25%, transparent); } .ctl.run .p { stroke: var(--fg); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.ctl i { display: grid; place-items: center; line-height: 0; }
+.ctl i .ic-play { transform: translateX(1.5px); }   /* the triangle is left-heavy; centre it optically */
 .stepper { display: flex; align-items: center; gap: 6px; }
 .stepper .ctl { width: 36px; height: 36px; }
 .card__stats { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0 6px; }
