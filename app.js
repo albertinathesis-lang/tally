@@ -371,7 +371,7 @@
     const HOURS = Array.from({ length: 24 }, (_, i) => pad(i)), MINS = Array.from({ length: 12 }, (_, i) => pad(i * 5));
     openSheet(`<h2 class="sheet__t"><span>${isNew ? 'New habit' : 'Edit habit'}</span><button class="navbtn" data-act="close" aria-label="Close">${ic('x', 22)}</button></h2>
       <div class="form">
-        <div class="frow"><label for="f-name">Name</label><input type="text" id="f-name" placeholder="Meditate" value="${esc(draft.name)}" autocomplete="off" autocapitalize="sentences"></div>
+        <div class="frow"><label for="f-name">Name</label><input type="text" id="f-name" placeholder="Meditate" value="${esc(draft.name)}" autocomplete="off" autocapitalize="sentences" enterkeyhint="done"></div>
         <div class="frow frow--col"><label>Icon</label><div class="istrip" id="istrip"><div class="istrip__pad"></div>${HABIT_ICONS.map(n => `<button class="iopt${n === draft.icon ? ' on' : ''}" data-v="${n}" aria-label="${n}">${ic(n, 22)}</button>`).join('')}<div class="istrip__pad"></div></div></div>
         <div class="frow frow--col"><label>Colour</label><div class="swatches"><button class="swatch none${draft.color ? '' : ' on'}" data-set="color" data-v="" aria-label="No colour">${ic('circle-slash', 16)}</button>${COLORS.map(c => `<button class="swatch${c === draft.color ? ' on' : ''}" style="--c:${c}" data-set="color" data-v="${c}" aria-label="${c}"></button>`).join('')}</div></div>
         ${draft.kind === 'todo' ? '' : `<div class="frow frow--col"><label>When</label>${toggle('group', GROUPS.map(g => [g, g]))}</div>`}
@@ -453,7 +453,7 @@
     if (!list) list = `<p class="note">Nothing matches.</p>`;
     openSheet(`<h2 class="sheet__t"><span>Templates</span><button class="navbtn" data-act="close" aria-label="Close">${ic('x', 22)}</button></h2>
       <div class="seg tplseg">${KINDS.map(([v, l]) => `<button class="${v === tplKind && !q ? 'on' : ''}" data-act="tpl-kind" data-v="${v}">${l}</button>`).join('')}</div>
-      <div class="search">${ic('search', 18)}<input type="search" id="tpl-q" placeholder="Search templates" value="${esc(tplQuery)}" autocomplete="off"></div>
+      <div class="search">${ic('search', 18)}<input type="search" id="tpl-q" placeholder="Search templates" value="${esc(tplQuery)}" autocomplete="off" enterkeyhint="search"></div>
       <div class="panel" style="margin-top:14px"><button class="row" data-act="tpl-custom" data-kind="${tplKind}"${(T[tplKind] || {}).color ? ` style="--hc:${T[tplKind].color}"` : ''}><span class="row__lead">${ic(KIND_ICON[tplKind], 20)}</span><span class="row__body"><span class="row__t">${tplKind === 'todo' ? 'Create a custom to-do' : 'Create a custom habit'}</span></span>${ic('chevron-right', 18, 'chev')}</button></div>
       ${list}`);
     const inp = $('#tpl-q'); if (q) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
@@ -461,7 +461,7 @@
   function renderTarget() {
     const el = $('#f-target'); if (!el) return;
     const lad = LADDER[draft.type], v = lad && ladderFit(lad, draft.target || (draft.type === 'timer' ? 10 : 1));
-    if (draft.type === 'count') el.innerHTML = `<div class="frow"><label>Goal</label><input type="text" id="f-u" class="unit" placeholder="what you count, e.g. glasses" value="${esc(draft.unit || '')}" aria-label="Unit">${wheelHtml('f-t', lad, v, 'wheel--goal')}</div>`;
+    if (draft.type === 'count') el.innerHTML = `<div class="frow"><label>Goal</label><input type="text" id="f-u" class="unit" placeholder="what you count, e.g. glasses" value="${esc(draft.unit || '')}" aria-label="Unit" enterkeyhint="done">${wheelHtml('f-t', lad, v, 'wheel--goal')}</div>`;
     else if (draft.type === 'timer') el.innerHTML = `<div class="frow"><label>Minutes</label>${wheelHtml('f-t', lad, v, 'wheel--goal')}</div>`;
     else el.innerHTML = '';
     targetWheel();

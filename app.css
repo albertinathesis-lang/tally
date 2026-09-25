@@ -5,15 +5,23 @@
   --ink: #1f2420; --ink-2: #4b514a; --ink-3: #737a71; --ink-4: #9aa097; --line: rgba(0,0,0,.14); --line-2: rgba(0,0,0,.08);
   --rust: #c25f3a; --sage: #8fa38a; --mustard-2: #a8891a;
   --ease-spring: cubic-bezier(0.32, 0.72, 0, 1); --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
-  --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); --bar-h: 72px;
+  --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); --bar-h: 72px;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
 }
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html { font-optical-sizing: auto; }
-html, body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--font); }
-body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; overscroll-behavior-y: none; -webkit-user-select: none; user-select: none; font-variant-numeric: tabular-nums; }
-button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+/* mobile-native baseline: no tap flash, no font inflation, no
+   pull-to-refresh or rubber-band on the page itself (the sheet keeps its
+   own bounce, see .sheet); zoom stays enabled — inputs are 16px+ instead */
+* { box-sizing: border-box; }
+html { font-optical-sizing: auto; -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; overscroll-behavior: none; }
+html, body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--font); overscroll-behavior: none; }
+body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-variant-numeric: tabular-nums; }
+/* controls are not text: no long-press selection or callout, no double-tap
+   wait before click. Content (names in the stats, notes) stays selectable */
+button, [role="button"], .tab, .wheel, .istrip, .toggle, .switch, .day, .cal__d, .grab, .card, .daystrokes { touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; transition: transform 120ms var(--ease-out-quart), opacity 120ms var(--ease-out-quart); }
+/* press feedback lands on pointer-down, not on release */
 button:active { opacity: .7; }
+.btn:active, .ctl:active, .plus:active, .dayb:active, .swatch:active, .choice__b:active, .navbtn:active, .now__stop:active { opacity: 1; transform: scale(.96); }
 input, select { font: inherit; color: inherit; }
 .ic { display: inline-block; vertical-align: middle; flex: none; color: currentColor; }
 .glass { background: var(--ground); }
@@ -110,7 +118,7 @@ input, select { font: inherit; color: inherit; }
 /* ---- sheet ---- */
 .scrim { position: fixed; inset: 0; z-index: 60; background: rgba(31,36,32,.42); opacity: 0; pointer-events: none; transition: opacity .25s ease; }
 .scrim.open { opacity: 1; pointer-events: auto; }
-.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; max-height: 92dvh; overflow: auto; background: var(--paper); color: var(--ink);
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; max-height: 92dvh; overflow: auto; overscroll-behavior: contain; background: var(--paper); color: var(--ink);
   padding: 10px 22px max(24px, var(--sab)); border-top: 1px solid var(--line); transform: translateY(100%); transition: transform .4s var(--ease-spring); -webkit-overflow-scrolling: touch; }
 .sheet.open { transform: translateY(0); }
 .sheet.closing { transition-duration: .28s; }
@@ -234,7 +242,7 @@ input, select { font: inherit; color: inherit; }
 
 /* ---- wheels: the reminder hours and minutes, and the goal. The pick sits
    in the centre; one neighbour shows faintly on each side ---- */
-.wheel { position: relative; display: flex; width: 126px; flex: none; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; touch-action: pan-x;
+.wheel { position: relative; display: flex; width: 126px; flex: none; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch;
   font-family: ui-monospace, "SF Mono", Menlo, "DM Mono", monospace; font-size: 30px; font-weight: 300; letter-spacing: -0.02em; line-height: 1;
   -webkit-mask-image: linear-gradient(to right, transparent, #000 34%, #000 66%, transparent); mask-image: linear-gradient(to right, transparent, #000 34%, #000 66%, transparent); }
 .wheel::-webkit-scrollbar { display: none; }
@@ -251,4 +259,4 @@ input, select { font: inherit; color: inherit; }
 .switch i { position: absolute; inset: 0; border: 1.5px solid var(--ink); border-radius: 15px; transition: background .2s; }
 .switch i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); transition: transform .25s var(--ease-spring), background .2s; }
 .switch input:checked + i { background: var(--ink); } .switch input:checked + i::after { background: var(--paper); transform: translateX(20px); }
-.form input.unit { flex: 1; text-align: left; color: var(--ink-2); font-size: 14px; }
+.form input.unit { flex: 1; text-align: left; color: var(--ink-2); font-size: 16px; }
