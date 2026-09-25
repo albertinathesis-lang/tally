@@ -191,7 +191,7 @@ input, select { font: inherit; color: inherit; }
 .wk .n .ic { color: var(--ink-3); }
 .dot { width: 22px; height: 22px; margin: 0 auto; border-radius: 50%; border: 1.5px solid var(--line); position: relative; display: grid; place-items: center; }
 .dot.on { background: var(--ink); border-color: var(--ink); color: var(--ground); }
-.dot svg { position: absolute; inset: -1.5px; } .dot .t { stroke: transparent; } .dot .p { stroke: var(--ink); stroke-linecap: round; }
+.dot > svg:not(.ic) { position: absolute; inset: -1.5px; } .dot .t { stroke: transparent; } .dot .p { stroke: var(--ink); stroke-linecap: round; }
 .dot.off { opacity: .35; }
 .badges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px 8px; padding: 20px 22px 24px; border-top: 1px solid var(--line); }
 .badge { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
@@ -232,17 +232,23 @@ input, select { font: inherit; color: inherit; }
 .toggle button.on { color: var(--paper); font-weight: 700; }
 .toggle__thumb { position: absolute; top: 0; bottom: 0; left: 0; width: calc(100% / var(--n)); background: var(--ink); transform: translateX(calc(var(--i) * 100%)); transition: transform .35s var(--ease-spring); }
 
-/* ---- reminder: the time always shown, in a numeral face, with a switch ---- */
-.rem { justify-content: space-between; }
-.rem__time, .num { flex: 1; display: flex; justify-content: flex-end; align-items: baseline; gap: 2px; font-family: ui-monospace, "SF Mono", Menlo, "DM Mono", monospace; font-size: 34px; font-weight: 300; letter-spacing: -0.02em; line-height: 1; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: ew-resize; transition: opacity .2s; position: relative; padding-right: 14px; }
-.rem__time b, .num b { font-weight: 300; padding: 6px 2px; border-bottom: 1.5px solid transparent; transition: border-color .2s; }
-.rem__time.drag b, .num.drag b { border-bottom-color: var(--ink); }
-.rem__time small, .num small { position: absolute; right: 14px; bottom: -6px; font-family: var(--font); font-size: 9px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); }
-.num span { font-family: var(--font); font-size: 13px; color: var(--ink-3); margin-left: 6px; }
-.rem__time.off { opacity: .3; }
+/* ---- wheels: the reminder hours and minutes, and the goal. The pick sits
+   in the centre; one neighbour shows faintly on each side ---- */
+.wheel { position: relative; display: flex; width: 126px; flex: none; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; touch-action: pan-x;
+  font-family: ui-monospace, "SF Mono", Menlo, "DM Mono", monospace; font-size: 30px; font-weight: 300; letter-spacing: -0.02em; line-height: 1;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 34%, #000 66%, transparent); mask-image: linear-gradient(to right, transparent, #000 34%, #000 66%, transparent); }
+.wheel::-webkit-scrollbar { display: none; }
+.wheel > i { flex: 0 0 42px; }
+.wheel b { flex: 0 0 42px; height: 46px; display: grid; place-items: center; scroll-snap-align: center; font-weight: 300; color: var(--ink-4); transform: scale(.62); transition: transform .2s var(--ease-out-quart), color .2s; user-select: none; -webkit-user-select: none; }
+.wheel b.on { color: var(--ink); transform: none; }
+.wheel--goal { margin-left: auto; }
+.rem__row { display: flex; align-items: center; gap: 4px; transition: opacity .2s; }
+.rem__row.off .wheel b.on { color: var(--ink-3); }
+.rem__colon { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 26px; font-weight: 300; color: var(--ink-3); margin-top: -4px; }
+.rem__row .switch, .form .frow--col label.switch { margin-left: auto; width: 50px; }
 .switch { position: relative; width: 50px; height: 30px; flex: none; }
 .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; }
 .switch i { position: absolute; inset: 0; border: 1.5px solid var(--ink); border-radius: 15px; transition: background .2s; }
 .switch i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); transition: transform .25s var(--ease-spring), background .2s; }
 .switch input:checked + i { background: var(--ink); } .switch input:checked + i::after { background: var(--paper); transform: translateX(20px); }
-.form input.unit { flex: 0 0 90px; text-align: left; color: var(--ink-2); }
+.form input.unit { flex: 1; text-align: left; color: var(--ink-2); font-size: 14px; }

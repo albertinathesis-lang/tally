@@ -368,83 +368,62 @@
     const isNew = draft._new;
     const toggle = (name, opts) => { const i = Math.max(0, opts.findIndex(o => o[0] === draft[name])); return `<div class="toggle" style="--n:${opts.length};--i:${i}"><i class="toggle__thumb"></i>${opts.map(([v, l]) => `<button class="${v === draft[name] ? 'on' : ''}" data-set="${name}" data-v="${v}">${l}</button>`).join('')}</div>`; };
     const rem = draft.reminder || draft._time || '09:00';
+    const HOURS = Array.from({ length: 24 }, (_, i) => pad(i)), MINS = Array.from({ length: 12 }, (_, i) => pad(i * 5));
     openSheet(`<h2 class="sheet__t"><span>${isNew ? 'New habit' : 'Edit habit'}</span><button class="navbtn" data-act="close" aria-label="Close">${ic('x', 22)}</button></h2>
       <div class="form">
         <div class="frow"><label for="f-name">Name</label><input type="text" id="f-name" placeholder="Meditate" value="${esc(draft.name)}" autocomplete="off" autocapitalize="sentences"></div>
-        <div class="frow frow--col"><label>Icon</label><div class="istrip" id="istrip"><div class="istrip__pad"></div>${HABIT_ICONS.map(n => `<button class="iopt${n === draft.icon ? ' on' : ''}" data-icon="${n}" aria-label="${n}">${ic(n, 22)}</button>`).join('')}<div class="istrip__pad"></div></div></div>
+        <div class="frow frow--col"><label>Icon</label><div class="istrip" id="istrip"><div class="istrip__pad"></div>${HABIT_ICONS.map(n => `<button class="iopt${n === draft.icon ? ' on' : ''}" data-v="${n}" aria-label="${n}">${ic(n, 22)}</button>`).join('')}<div class="istrip__pad"></div></div></div>
         <div class="frow frow--col"><label>Colour</label><div class="swatches"><button class="swatch none${draft.color ? '' : ' on'}" data-set="color" data-v="" aria-label="No colour">${ic('circle-slash', 16)}</button>${COLORS.map(c => `<button class="swatch${c === draft.color ? ' on' : ''}" style="--c:${c}" data-set="color" data-v="${c}" aria-label="${c}"></button>`).join('')}</div></div>
         ${draft.kind === 'todo' ? '' : `<div class="frow frow--col"><label>When</label>${toggle('group', GROUPS.map(g => [g, g]))}</div>`}
         <div class="frow frow--col"><label>Type</label>${toggle('type', [['check', 'Check'], ['count', 'Count'], ['timer', 'Timer']])}</div>
         <div id="f-target"></div>
-        <div class="frow rem"><label>Reminder</label><div class="rem__time${draft.reminder ? '' : ' off'}" id="f-r" data-v="${rem}" role="slider" aria-label="Reminder time" aria-valuetext="${rem}"><b class="hh" data-part="h">${rem.slice(0, 2)}</b><span>:</span><b class="mm" data-part="m">${rem.slice(3)}</b><small>drag</small></div><label class="switch"><input type="checkbox" id="f-ron" ${draft.reminder ? 'checked' : ''}><i></i></label></div>
+        <div class="frow frow--col rem"><label>Reminder</label><div class="rem__row${draft.reminder ? '' : ' off'}">${wheelHtml('f-rh', HOURS, rem.slice(0, 2))}<span class="rem__colon">:</span>${wheelHtml('f-rm', MINS, rem.slice(3))}<label class="switch"><input type="checkbox" id="f-ron" ${draft.reminder ? 'checked' : ''}><i></i></label></div></div>
         ${draft.kind === 'todo' ? '' : `<div class="frow frow--col"><label>Days</label><div class="days">${DAYS.map((d, i) => `<button class="dayb${draft.days[i] ? ' on' : ''}" data-day="${i}" aria-label="${d}">${d[0]}</button>`).join('')}</div></div>`}
       </div>
       <button class="btn" data-act="save">${isNew ? (draft.kind === 'todo' ? 'Add to-do' : 'Add habit') : 'Save'}</button>
       ${isNew ? '' : `<button class="btn btn--2" data-act="archive">${draft.archived ? 'Restore' : 'Archive'}</button><button class="btn btn--danger" data-act="delete">Delete habit and history</button>`}`);
     renderTarget();
     iconStrip();
-    timeDrag();
+    timeWheels();
     if (first && isNew && !draft.name) setTimeout(() => $('#f-name').focus(), 420);
   }
-  // the icon strip: drag it, the centred icon is the pick, with a tick per icon
-  function iconStrip() {
-    const strip = $('#istrip'); if (!strip) return;
-    const opts = [...strip.querySelectorAll('.iopt')];
-    const centre = () => strip.scrollLeft + strip.clientWidth / 2;
-    const nearest = () => { let best = 0, d = Infinity; opts.forEach((o, i) => { const c = o.offsetLeft + o.offsetWidth / 2, dd = Math.abs(c - centre()); if (dd < d) { d = dd; best = i; } }); return best; };
-    const sel = opts.findIndex(o => o.dataset.icon === draft.icon);
-    let quiet = true, cur = sel;
-    if (sel >= 0) strip.scrollLeft = opts[sel].offsetLeft + opts[sel].offsetWidth / 2 - strip.clientWidth / 2;
+  // a horizontal wheel: a snapping strip whose centred item is the pick,
+  // with a tick per item. The icon strip, the reminder hours and minutes
+  // and the goal all use it. Values live in data-v; the pick in the
+  // strip's own data-v.
+  function wheel(el, onPick) {
+    if (!el) return;
+    const opts = [...el.children].filter(o => o.dataset.v != null);
+    const centre = () => el.scrollLeft + el.clientWidth / 2;
+    const nearest = () => { let best = 0, d = Infinity; opts.forEach((o, i) => { const dd = Math.abs(o.offsetLeft + o.offsetWidth / 2 - centre()); if (dd < d) { d = dd; best = i; } }); return best; };
+    let cur = opts.findIndex(o => o.classList.contains('on')), quiet = true;
+    if (cur >= 0) { el.scrollLeft = opts[cur].offsetLeft + opts[cur].offsetWidth / 2 - el.clientWidth / 2; el.dataset.v = opts[cur].dataset.v; }
     setTimeout(() => { quiet = false; }, 300);
     let raf = null;
-    strip.addEventListener('scroll', () => {
+    el.addEventListener('scroll', () => {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = null; const i = nearest();
-        if (i !== cur) { cur = i; opts.forEach((o, j) => o.classList.toggle('on', j === i)); draft.icon = opts[i].dataset.icon; if (!quiet) clickSound(); }
+        if (i !== cur) { cur = i; opts.forEach((o, j) => o.classList.toggle('on', j === i)); el.dataset.v = opts[i].dataset.v; onPick(opts[i].dataset.v, quiet); if (!quiet) clickSound(); }
       });
     }, { passive: true });
-    strip.addEventListener('pointerdown', () => { quiet = false; ensureAudio(); });
+    el.addEventListener('pointerdown', () => { quiet = false; ensureAudio(); }, { passive: true });
+    el.addEventListener('touchstart', () => { quiet = false; ensureAudio(); }, { passive: true });
     opts.forEach(o => o.addEventListener('click', () => { o.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }));
   }
-  // sideways drags on the numeral faces. Touch events are used on the
-  // phone (WebKit cancels pointer drags inside a scrolling sheet), pointer
-  // events elsewhere; either way the page does not scroll under the drag.
-  const STEP = 14;                                            // px per step
-  function scrub(el, onStart, onStep) {
-    let active = false, x0 = 0, last = 0, id = null;
-    const begin = (x, target) => { active = true; x0 = x; last = 0; el.classList.add('drag'); ensureAudio(); onStart(target); };
-    const move = x => { if (!active) return; const n = Math.round((x - x0) / STEP); if (n === last) return; last = n; onStep(n); clickSound(); };
-    const end = () => { active = false; el.classList.remove('drag'); };
-    el.addEventListener('touchstart', e => { begin(e.touches[0].clientX, e.target); }, { passive: true });
-    el.addEventListener('touchmove', e => { if (active) { e.preventDefault(); move(e.touches[0].clientX); } }, { passive: false });
-    el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
-    el.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') return; id = e.pointerId; try { el.setPointerCapture(id); } catch (x) {} begin(e.clientX, e.target); });
-    el.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') move(e.clientX); });
-    el.addEventListener('pointerup', e => { if (e.pointerType !== 'touch') end(); }); el.addEventListener('pointercancel', e => { if (e.pointerType !== 'touch') end(); });
-  }
-  // the reminder time: hours or minutes, whichever is under the finger
-  function timeDrag() {
-    const el = $('#f-r'); if (!el) return;
-    const hh = el.querySelector('.hh'), mm = el.querySelector('.mm');
-    const set = (h, m) => { h = (h + 24) % 24; m = (m + 60) % 60; el.dataset.v = pad(h) + ':' + pad(m); hh.textContent = pad(h); mm.textContent = pad(m); el.setAttribute('aria-valuetext', el.dataset.v); };
-    let part = 'h', h0 = 0, m0 = 0;
-    scrub(el, target => {
-      const b = target.closest && target.closest('[data-part]'); part = b ? b.dataset.part : 'h';
-      [h0, m0] = el.dataset.v.split(':').map(Number);
-      const on = $('#f-ron'); if (on && !on.checked) { on.checked = true; el.classList.remove('off'); }
-    }, n => { if (part === 'h') set(h0 + n, m0); else set(h0, m0 + n * 5); });
+  const wheelHtml = (id, values, current, cls = '') => `<div class="wheel ${cls}" id="${id}" data-v="${current}"><i></i>${values.map(v => `<b class="${String(v) === String(current) ? 'on' : ''}" data-v="${v}">${v}</b>`).join('')}<i></i></div>`;
+  function iconStrip() { wheel($('#istrip'), v => { draft.icon = v; }); }
+  // the reminder: hours and minutes wheels; turning either switches it on
+  function timeWheels() {
+    const on = $('#f-ron');
+    const pick = (v, quiet) => { if (!quiet && on && !on.checked) { on.checked = true; const r = $('.rem__row'); if (r) r.classList.remove('off'); } };
+    wheel($('#f-rh'), pick); wheel($('#f-rm'), pick);
   }
   // the goal: minutes for a timer, a count otherwise, along a ladder that
   // is fine at the bottom and coarse higher up
   const LADDER = { timer: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40, 45, 50, 60, 75, 90, 120, 150, 180, 240], count: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100, 150, 200, 500, 1000] };
-  function targetDrag() {
-    const el = $('#f-t'); if (!el) return;
-    const lad = LADDER[draft.type] || LADDER.count, num = el.querySelector('b');
-    let i0 = 0;
-    scrub(el, () => { const v = Number(el.dataset.v); i0 = lad.findIndex(x => x >= v); if (i0 < 0) i0 = lad.length - 1; },
-      n => { const i = Math.max(0, Math.min(lad.length - 1, i0 + n)); el.dataset.v = lad[i]; num.textContent = lad[i]; el.setAttribute('aria-valuetext', String(lad[i])); });
-  }
+  const ladderFit = (lad, v) => lad.reduce((best, x) => Math.abs(x - v) < Math.abs(best - v) ? x : best, lad[0]);
+  function targetWheel() { wheel($('#f-t'), () => {}); }
   // the tick: a short click through Web Audio, and the selection haptic on the phone
   let actx = null;
   function ensureAudio() { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {} }
@@ -481,17 +460,17 @@
   }
   function renderTarget() {
     const el = $('#f-target'); if (!el) return;
-    const face = (v, unit) => `<div class="num" id="f-t" data-v="${v}" role="slider" aria-label="Goal" aria-valuetext="${v}"><b>${v}</b>${unit ? `<span>${unit}</span>` : ''}<small>drag</small></div>`;
-    if (draft.type === 'count') el.innerHTML = `<div class="frow"><label>Goal</label><input type="text" id="f-u" class="unit" placeholder="glasses" value="${esc(draft.unit || '')}" aria-label="Unit">${face(draft.target || 1)}</div>`;
-    else if (draft.type === 'timer') el.innerHTML = `<div class="frow"><label>Minutes</label>${face(draft.target || 10)}</div>`;
+    const lad = LADDER[draft.type], v = lad && ladderFit(lad, draft.target || (draft.type === 'timer' ? 10 : 1));
+    if (draft.type === 'count') el.innerHTML = `<div class="frow"><label>Goal</label><input type="text" id="f-u" class="unit" placeholder="what you count, e.g. glasses" value="${esc(draft.unit || '')}" aria-label="Unit">${wheelHtml('f-t', lad, v, 'wheel--goal')}</div>`;
+    else if (draft.type === 'timer') el.innerHTML = `<div class="frow"><label>Minutes</label>${wheelHtml('f-t', lad, v, 'wheel--goal')}</div>`;
     else el.innerHTML = '';
-    targetDrag();
+    targetWheel();
   }
   function readDraft() {
     const n = $('#f-name'); if (n) draft.name = n.value.trim();
     const t = $('#f-t'); if (t) draft.target = Math.max(1, parseInt(t.dataset.v, 10) || 1);
     const u = $('#f-u'); if (u) draft.unit = u.value.trim();
-    const r = $('#f-r'), on = $('#f-ron'); if (r) { draft._time = r.dataset.v || '09:00'; draft.reminder = on && on.checked ? draft._time : ''; }
+    const rh = $('#f-rh'), rm = $('#f-rm'), on = $('#f-ron'); if (rh && rm) { draft._time = rh.dataset.v + ':' + rm.dataset.v; draft.reminder = on && on.checked ? draft._time : ''; }
   }
 
   // ---------- inline timers ----------
@@ -742,7 +721,7 @@
   let qTimer = null;
   document.addEventListener('input', e => {
     if (e.target.id === 'tpl-q') { clearTimeout(qTimer); const v = e.target.value; qTimer = setTimeout(() => { tplQuery = v; templatesSheet(); }, 250); }
-    if (e.target.id === 'f-ron') { const t = document.querySelector('.rem__time'); if (t) t.classList.toggle('off', !e.target.checked); }
+    if (e.target.id === 'f-ron') { const t = document.querySelector('.rem__row'); if (t) t.classList.toggle('off', !e.target.checked); }
   });
 
   // ---------- boot ----------
