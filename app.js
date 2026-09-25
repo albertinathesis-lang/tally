@@ -35,7 +35,8 @@
     s.habits.forEach(h => { if (!I[h.icon]) h.icon = EMOJI_MAP[h.icon] || 'circle-check'; if (!h.kind) h.kind = 'good'; if (h.color == null) h.color = ''; });   // v1 emoji -> line icon
     return s;
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} if (typeof syncPush === 'function') syncPush(); }
+  let schedTimer = null;
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} if (typeof syncPush === 'function') syncPush(); if (window.TALLY_NATIVE && typeof reminderList === 'function') { clearTimeout(schedTimer); schedTimer = setTimeout(() => { if (notifState() === 'granted') window.TALLY_NATIVE.schedule(reminderList()); }, 800); } }
   const uid = () => Math.random().toString(36).slice(2, 10);
 
   // ---------- dates ----------
@@ -361,7 +362,8 @@
   // the reminders, the timezone and what is done today). A job there runs
   // every minute and pushes whatever is due. Nothing else leaves the phone.
   const PUSH = { url: 'https://lodogasuaggsibycwqyi.supabase.co', key: 'sb_publishable_PyPIDVs6quS3Qlv-hXqrHQ_hx53bZgN', vapid: 'BFThnWY2_-TOy3R00UIPO2Tk9X6GhmWp-G05YSaEjktanUIpA0KHWWapbf-Kva0xvDNmlo1oF0pMgxBvpIO1IL8' };
-  const pushReady = () => PUSH.url.startsWith('https://') && 'PushManager' in window && 'serviceWorker' in navigator;
+  const NATIVE = window.TALLY_NATIVE || null;
+  const pushReady = () => !NATIVE && PUSH.url.startsWith('https://') && 'PushManager' in window && 'serviceWorker' in navigator;
   function b64ToU8(b) { const s = atob((b + '='.repeat((4 - b.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(s, c => c.charCodeAt(0)); }
   function reminderList() {
     return state.habits.filter(h => !h.archived && h.reminder).map(h => ({ id: h.id, name: h.name, time: h.reminder, days: h.days,
@@ -416,6 +418,7 @@
       ${h.type === 'timer' && !done(h, t) ? `<button class="btn btn--2" data-act="a-timer" data-id="${h.id}">Start the timer</button>` : ''}`);
   }
   function snooze(h) {
+    if (NATIVE) { NATIVE.snooze({ id: h.id, name: h.name, body: reminderList().find(r => r.id === h.id)?.body }, 60); return; }
     if (state.push) syncPush({ snooze: { id: h.id, minutes: 60 } });
     else setTimeout(() => { if (!done(h, today())) notify(h, 'Time for it.'); }, 60 * 60 * 1000);
   }
@@ -424,6 +427,12 @@
     if (m.type === 'open-habit') { selected = today(); view = 'today'; render(); actionSheet(m.id); }
     if (m.type === 'done') applyPending();
   });
+  if (NATIVE) NATIVE.handlers.action = (actionId, id) => {
+    const h = state.habits.find(x => x.id === id); if (!h) return;
+    if (actionId === 'done') { setValue(h, today(), target(h)); render(); }
+    else if (actionId === 'snooze') snooze(h);
+    else { selected = today(); view = 'today'; render(); actionSheet(h.id); }
+  };
   const fromNotif = new URLSearchParams(location.search).get('habit');
   if (fromNotif) history.replaceState(null, '', location.pathname);
 
@@ -434,12 +443,15 @@
   // device: there is no push server.
   const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  function notifState() { return !('Notification' in window) ? 'unsupported' : Notification.permission; }
+  let nativePerm = 'default';
+  if (NATIVE) NATIVE.permission().then(p => { nativePerm = p; render(); });
+  function notifState() { if (NATIVE) return nativePerm; return !('Notification' in window) ? 'unsupported' : Notification.permission; }
   function notifRow() {
     const st = notifState();
     const label = { granted: 'Allowed', denied: 'Blocked in Settings', default: 'Off', unsupported: 'Not available here' }[st];
     if (st === 'default') return `<button class="row" data-act="notif"><span>Notifications</span><small style="color:var(--accent)">Allow</small></button>`;
     let rows = `<div class="row"><span>Notifications</span><small>${label}</small></div>`;
+    if (NATIVE && st === 'granted') return rows + `<div class="row"><span>While Tally is closed</span><small>On</small></div>`;
     if (st === 'granted' && pushReady()) rows += state.push
       ? `<div class="row"><span>While Tally is closed</span><small>On</small></div>`
       : `<button class="row" data-act="push-on"><span>While Tally is closed</span><small style="color:var(--accent)">Turn on</small></button>`;
@@ -449,10 +461,12 @@
     const st = notifState();
     if (st === 'unsupported' && isIOS() && !standalone()) return 'On iPhone, notifications work once Tally is on the Home Screen: open this page in Safari, tap Share, then Add to Home Screen.';
     if (st === 'denied') return 'Notifications are blocked for Tally. Turn them on in the phone\'s Settings, under Notifications.';
+    if (NATIVE) return st === 'granted' ? 'Set a time on any habit and the reminder arrives at that minute, whether Tally is open or not. Everything is scheduled on this phone.' : 'Allow notifications and a reminder arrives at the time you set on a habit, whether Tally is open or not.';
     if (state.push) return 'Set a time on any habit and the reminder arrives at that minute, whether Tally is open or not. The server holds only your reminder times, your timezone and what is done today.';
     return 'Set a time on any habit and a reminder arrives at that minute while Tally is open. Turn on "While Tally is closed" to have them delivered any time.';
   }
   function askNotifications() {
+    if (NATIVE) { NATIVE.ask().then(p => { nativePerm = p; if (p === 'granted') NATIVE.schedule(reminderList()); render(); }); return; }
     if (!('Notification' in window)) return;
     Notification.requestPermission().then(async p => {
       if (p === 'granted' && pushReady()) { try { await subscribePush(); } catch (e) { console.warn('push subscribe failed', e); } }
@@ -460,12 +474,13 @@
     });
   }
   function notify(h, body) {
+    if (NATIVE) { NATIVE.test(); return; }
     if (notifState() !== 'granted') return;
     const opts = { body, tag: 'tally-' + h.id, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { id: h.id } };
     navigator.serviceWorker.ready.then(r => r.showNotification(h.name, opts)).catch(() => { try { new Notification(h.name, opts); } catch (e) {} });
   }
   function checkReminders() {
-    if (state.push) return;                       // the server delivers
+    if (state.push || NATIVE) return;             // the server, or the phone itself, delivers
     const t = today(), now = new Date(), hm = pad(now.getHours()) + ':' + pad(now.getMinutes());
     state.notified = state.notified && state.notified.date === t ? state.notified : { date: t, ids: [] };
     let changed = false;
@@ -502,7 +517,7 @@
       case 'a-snooze': snooze(h); closeSheet(); break;
       case 'a-timer': closeSheet(); selected = today(); startTimer(h); break;
       case 'pick': selected = el.dataset.k; render(); break;
-      case 'toggle': setValue(h, selected, done(h, selected) ? 0 : 1); render(); break;
+      case 'toggle': setValue(h, selected, done(h, selected) ? 0 : 1); if (NATIVE) (done(h, selected) ? NATIVE.success : NATIVE.tap)(); render(); break;
       case 'inc': setValue(h, selected, value(h, selected) + 1); render(); break;
       case 'dec': setValue(h, selected, value(h, selected) - 1); render(); break;
       case 'timer': if (running(h)) stopTimer(h); else if (!done(h, today())) { selected = today(); startTimer(h); } break;

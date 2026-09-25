@@ -49,3 +49,21 @@ Files: index.html (shell), tokens.css (design tokens, from the
 apple-design-skill), app.css, app.js (everything), icons.js (Lucide line
 icons, ISC), sw.js (offline cache — bump CACHE when shipping), logo.svg,
 manifest.webmanifest, icons/, design.html.
+
+## Native app (iPhone)
+
+`native/` wraps the same web app in a Capacitor shell (SPM, no CocoaPods).
+`native/native.js` is loaded only there: reminders become local
+notifications scheduled on the phone with Done / In 1 hour buttons (no push
+server), haptics on checks. Bundle id `com.aiartlab.tally`, team 7U76K536SH.
+
+    cd native && npm install
+    npm run sync                      # copies ../ into www/ and syncs plugins
+    xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+      -destination "id=<device udid>" -derivedDataPath build \
+      -allowProvisioningUpdates build
+    xcrun devicectl device install app --device <udid> build/Build/Products/Debug-iphoneos/App.app
+
+With a free Apple ID the install is valid for 7 days and the phone can hold
+three such apps at once. Widgets and the Live Activity (design.html) are the
+next native pieces, in Swift.
