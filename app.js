@@ -188,9 +188,53 @@
   const TABS = [['today', 'list-checks', 'Habits'], ['stats', 'chart-no-axes-column', 'Statistics'], ['sharing', 'users', 'Sharing'], ['settings', 'settings', 'Settings']];
   function renderTabs() {
     const bar = $('#tabbar');
-    if (!bar.querySelector('.tab')) bar.innerHTML = `<i class="tabbar__glass"></i>${TABS.map(([v, i, l]) => `<button class="tab" data-view="${v}">${ic(i, 26)}<span>${l}</span></button>`).join('')}`;
+    if (!bar.querySelector('.tab')) { bar.innerHTML = `<i class="tabbar__glass"></i>${TABS.map(([v, i, l]) => `<button class="tab" data-view="${v}">${ic(i, 26)}<span>${l}</span></button>`).join('')}`; tabLens(bar); }
     bar.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.view === view));
-    bar.querySelector('.tabbar__glass').style.transform = `translateX(${TABS.findIndex(t => t[0] === view) * 100}%)`;
+    if (!bar.classList.contains('dragging')) bar.querySelector('.tabbar__glass').style.transform = `translateX(${TABS.findIndex(t => t[0] === view) * 100}%)`;
+  }
+  // the Liquid Glass lens: on touch the pill inflates into a raised glass
+  // blob, follows the finger along the bar, then slides to the nearest tab
+  // and settles back into the flat tinted pill (gesture: spring-like curves)
+  let tabSuppress = 0;
+  function tabLens(bar) {
+    const g = bar.querySelector('.tabbar__glass');
+    const slot = () => (bar.clientWidth - 8) / TABS.length;
+    let d = null, settle = null;
+    const lift = () => { clearTimeout(settle); g.classList.add('lift'); bar.classList.add('lifted'); };
+    const drop = (ms) => { clearTimeout(settle); settle = setTimeout(() => { g.classList.remove('lift'); bar.classList.remove('lifted'); }, ms); };
+    bar.addEventListener('pointerdown', e => {
+      if (!e.isPrimary) return;
+      const i = TABS.findIndex(t => t[0] === view);
+      d = { x0: e.clientX, i0: i, moved: false, pid: e.pointerId, last: [[e.clientX, performance.now()]] };
+      lift(); tap();
+    });
+    bar.addEventListener('pointermove', e => {
+      if (!d) return;
+      const dx = e.clientX - d.x0;
+      if (!d.moved && Math.abs(dx) < 6) return;
+      if (!d.moved) { try { bar.setPointerCapture(d.pid); } catch (x) {} bar.classList.add('dragging'); }
+      d.moved = true; d.last.push([e.clientX, performance.now()]); if (d.last.length > 6) d.last.shift();
+      let pos = d.i0 + dx / slot();
+      if (pos < 0) pos = pos / 3; if (pos > TABS.length - 1) pos = TABS.length - 1 + (pos - TABS.length + 1) / 3;   // friction past the ends
+      g.style.transition = 'none'; g.style.transform = `translateX(${pos * 100}%)`;
+      const near = Math.max(0, Math.min(TABS.length - 1, Math.round(pos)));
+      bar.querySelectorAll('.tab').forEach((t, j) => t.classList.toggle('near', j === near));
+    });
+    const end = e => {
+      if (!d) return; const cur = d; d = null;
+      bar.classList.remove('dragging'); bar.querySelectorAll('.tab').forEach(t => t.classList.remove('near'));
+      g.style.transition = '';
+      if (!cur.moved) { drop(260); return; }                     // a tap: the click handler switches
+      e.preventDefault(); tabSuppress = performance.now() + 350;
+      const [x1, t1] = cur.last[0], [x2, t2] = cur.last[cur.last.length - 1];
+      const vel = t2 > t1 ? (x2 - x1) / (t2 - t1) : 0;
+      const carry = Math.abs(vel) > 0.6 ? Math.max(-0.35, Math.min(0.35, vel * 60 / slot())) : 0;
+      const i = Math.max(0, Math.min(TABS.length - 1, Math.round(cur.i0 + (e.clientX - cur.x0) / slot() + carry)));
+      g.style.transform = `translateX(${i * 100}%)`;
+      if (TABS[i][0] !== view || stack.length) { view = TABS[i][0]; stack = []; render('fade'); }
+      drop(320);
+    };
+    bar.addEventListener('pointerup', end); bar.addEventListener('pointercancel', end);
   }
   const push = p => { stack.push(p); render('push'); };
   const pageT = (title, left, right) => `<div class="page-t glass">${left || `<button class="l circ" data-act="pop" aria-label="Back">${ic('chevron-left', 24)}</button>`}<span>${title}</span>${right || ''}</div>`;
@@ -906,6 +950,37 @@
     if (!ok || order.join() !== want.join()) { clearTimeout(flipTimer); flipTimer = setTimeout(flipList, ok ? 320 : 0); }
   }
 
+  // ---------- long press on a card: Grit's context menu ----------
+  let pressTimer = null, pressEl = null, pressSuppress = 0, ctxEl = null;
+  function closeCtx() { if (!ctxEl) return; const c = ctxEl; ctxEl = null; c.classList.add('out'); setTimeout(() => c.remove(), 180); document.querySelectorAll('.card.pressed').forEach(x => x.classList.remove('pressed')); }
+  function contextMenu(card, h) {
+    closeCtx(); if (NATIVE && NATIVE.success) NATIVE.tap();
+    card.classList.add('pressed');
+    const r = card.getBoundingClientRect(), W = 230;
+    const item = (act, icon, label, cls = '') => `<button class="ci ${cls}" data-act="${act}" data-id="${h.id}">${ic(icon, 22)}<span>${label}</span></button>`;
+    const el = document.createElement('div'); el.className = 'ctx'; ctxEl = el;
+    el.innerHTML = `<div class="ctx__scrim" data-act="ctx-close"></div><div class="ctx__panel glass" style="--c:${h.color}"><div class="ctx__cap">${todayTitle()}</div><div class="ctx__grid">
+      ${item('skip', 'fast-forward', skipped(h, selected) ? 'Unskip' : 'Skip')}${item('fail', 'x', failed(h, selected) ? 'Unfail' : 'Fail')}${item(done(h, selected) ? 'undo' : 'complete', 'check', done(h, selected) ? 'Undo' : 'Complete')}
+      ${item('duplicate', 'copy', 'Duplicate')}${item('note', 'notebook-pen', 'Add Note')}${item('reset', 'eraser', 'Reset History')}
+      ${item('edit', 'pen-line', 'Edit')}${item('archive', 'archive', h.archived ? 'Restore' : 'Archive')}${item('delete', 'trash-2', 'Delete', 'danger')}</div>
+      <button class="ctx__row" data-act="stats-of" data-id="${h.id}">${ic('chart-line', 20)}<span>Statistics</span></button>
+      <button class="ctx__row" data-act="open" data-id="${h.id}">${ic('ellipsis', 20)}<span>More</span>${ic('chevron-right', 16)}</button></div>`;
+    document.body.appendChild(el);
+    const p = el.querySelector('.ctx__panel');
+    let top = r.bottom + 10; if (top + 330 > window.innerHeight - 90) { top = Math.max(60, r.top - 340); p.style.transformOrigin = 'bottom center'; }
+    p.style.left = Math.max(12, Math.min(window.innerWidth - W - 12, r.left + r.width / 2 - W / 2)) + 'px'; p.style.top = top + 'px'; p.style.width = W + 'px';
+  }
+  document.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const card = e.target.closest('.card'); if (!card || !card.id.startsWith('card-') || !onToday()) return;
+    const x0 = e.clientX, y0 = e.clientY;
+    clearTimeout(pressTimer); pressEl = card;
+    pressTimer = setTimeout(() => { const h = state.habits.find(x => x.id === card.id.slice(5)); if (!h) return; pressSuppress = performance.now() + 600; contextMenu(card, h); }, 480);
+    const cancel = ev => { if (ev && ev.type === 'pointermove' && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 8) return; clearTimeout(pressTimer); document.removeEventListener('pointermove', cancel); document.removeEventListener('pointerup', cancel); document.removeEventListener('pointercancel', cancel); };
+    document.addEventListener('pointermove', cancel); document.addEventListener('pointerup', cancel); document.addEventListener('pointercancel', cancel);
+  });
+  document.addEventListener('contextmenu', e => { if (e.target.closest('.card')) e.preventDefault(); });
+
   // ---------- events ----------
   const canLog = k => k <= today() || S().futureDates;
   function mark(h, k, delta) {
@@ -916,11 +991,18 @@
     afterChange(h); refreshDetail();
   }
   document.addEventListener('click', e => {
-    const tab = e.target.closest('.tab'); if (tab) { if (view === tab.dataset.view && !stack.length) return; view = tab.dataset.view; stack = []; render('fade'); return; }
+    if (performance.now() < pressSuppress && !e.target.closest('.ctx')) { e.preventDefault(); return; }
+    if (ctxEl && !e.target.closest('.ctx__panel')) { closeCtx(); if (!e.target.closest('[data-act]')) return; }
+    else if (ctxEl && e.target.closest('.ctx__panel')) closeCtx();
+    const tab = e.target.closest('.tab'); if (tab) { if (performance.now() < tabSuppress) return; if (view === tab.dataset.view && !stack.length) return; view = tab.dataset.view; stack = []; render('fade'); return; }
     const el = e.target.closest('[data-act]'); if (!el) return;
     const act = el.dataset.act, id = el.dataset.id, h = id && state.habits.find(x => x.id === id);
     switch (act) {
       case 'none': break;
+      case 'ctx-close': break;
+      case 'duplicate': { const c = JSON.parse(JSON.stringify(h)); c.id = uid(); c.name = h.name + ' copy'; c.createdAt = today(); c.startsOn = today(); state.habits.splice(state.habits.indexOf(h) + 1, 0, c); save(); if (onToday()) flipList(); else render(); break; }
+      case 'reset': if (confirm('Reset all history for ' + h.name + '?')) { Object.keys(state.log).forEach(k => { delete state.log[k][id]; if (!Object.keys(state.log[k]).length) delete state.log[k]; }); Object.keys(state.status).forEach(k => { delete state.status[k][id]; }); save(); afterChange(h); } break;
+      case 'stats-of': statsSel = [id]; view = 'stats'; stack = []; render('fade'); break;
       case 'pop': readDraft(); stack.pop(); if (!stack.length) draft = null; render('pop'); break;
       case 'go': readDraft(); push({ p: el.dataset.p }); break;
       case 'add': tplKind = 'good'; tplQuery = ''; templatesSheet(); break;
