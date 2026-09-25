@@ -18,6 +18,10 @@
   // ---------- data ----------
   const KEY = 'tally.v1';
   const GROUPS = ['Morning', 'Afternoon', 'Evening', 'Anytime'];
+  const KINDS = [['good', 'Good'], ['health', 'Health'], ['bad', 'Bad'], ['todo', 'To-do']];
+  const KIND_ICON = { good: 'circle-check', health: 'heart-pulse', bad: 'ban', todo: 'list-todo' };
+  const COLORS = ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#00c7be', '#007aff', '#5856d6', '#af52de', '#ff2d55'];
+  const T = window.TEMPLATES || {};
   const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const STREAKS = [2, 5, 7, 14, 30, 60, 90, 180, 365];
   const GOALS = [10, 50, 100, 250, 500, 1000];
@@ -27,7 +31,7 @@
     let s = null;
     try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
     if (!s || !s.habits) return { habits: [], log: {} };
-    s.habits.forEach(h => { if (!I[h.icon]) h.icon = EMOJI_MAP[h.icon] || 'circle-check'; });   // v1 emoji -> line icon
+    s.habits.forEach(h => { if (!I[h.icon]) h.icon = EMOJI_MAP[h.icon] || 'circle-check'; if (!h.kind) h.kind = 'good'; if (h.color == null) h.color = ''; });   // v1 emoji -> line icon
     return s;
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} if (typeof syncPush === 'function') syncPush(); }
@@ -40,7 +44,8 @@
   const parse = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
   const addDays = (k, n) => { const d = parse(k); d.setDate(d.getDate() + n); return key(d); };
   const dow = k => (parse(k).getDay() + 6) % 7;
-  const scheduled = (h, k) => h.days[dow(k)] && k >= h.createdAt;
+  const firstDone = h => { const ks = Object.keys(state.log).filter(k => (state.log[k][h.id] || 0) >= (h.type === 'check' ? 1 : (h.target || 1))).sort(); return ks[0] || null; };
+  const scheduled = (h, k) => h.kind === 'todo' ? (k >= h.createdAt && (!firstDone(h) || k <= firstDone(h))) : (h.days[dow(k)] && k >= h.createdAt);
 
   // ---------- progress ----------
   const value = (h, k) => (state.log[k] && state.log[k][h.id]) || 0;
@@ -94,7 +99,7 @@
     window.scrollTo(0, 0); onScroll();
   }
   function renderTabs() {
-    $('#tabbar').innerHTML = [['today', 'circle-check', 'Today'], ['stats', 'chart-no-axes-column', 'Statistics'], ['awards', 'award', 'Awards'], ['settings', 'settings', 'Settings']]
+    $('#tabbar').innerHTML = [['today', 'list-checks', 'Habits'], ['stats', 'chart-no-axes-column', 'Statistics'], ['awards', 'award', 'Awards'], ['settings', 'settings', 'Settings']]
       .map(([v, i, l]) => `<button class="tab${v === view ? ' on' : ''}" data-view="${v}">${ic(i, 26)}${l}</button>`).join('');
   }
   function onScroll() { navc.classList.toggle('show', window.scrollY > 44); }
@@ -123,17 +128,24 @@
     if (dayHabits.length) html += `<div class="hero"><div><div class="hero__k">${selected === t ? 'Today' : parse(selected).toLocaleDateString(undefined, { weekday: 'long' })}</div><div class="hero__n">${nDone} of ${dayHabits.length} done</div><div class="hero__s">${best ? `Longest current streak ${best} day${best === 1 ? '' : 's'}` : 'Start a streak'}</div></div><div class="ring" style="position:relative">${ring(72, 7, p || 0)}<span class="ring__label">${Math.round((p || 0) * 100)}%</span></div></div>`;
     else return html + `<div class="empty"><b>Nothing scheduled</b>No habits on this day.</div>`;
     GROUPS.forEach(g => {
-      const hs = dayHabits.filter(h => h.group === g);
+      const hs = dayHabits.filter(h => h.group === g && h.kind !== 'todo');
       if (!hs.length) return;
       html += `<div class="eyebrow"><span>${g}</span><span>${hs.filter(h => done(h, selected)).length}/${hs.length}</span></div><div class="panel">`;
       hs.forEach(h => { html += habitRow(h); });
       html += '</div>';
     });
+    const todos = dayHabits.filter(h => h.kind === 'todo');
+    if (todos.length) {
+      html += `<div class="eyebrow"><span>To-do</span><span>${todos.filter(h => done(h, selected)).length}/${todos.length}</span></div><div class="panel">`;
+      todos.forEach(h => { html += habitRow(h); });
+      html += '</div>';
+    }
     return html;
   }
   function habitRow(h) {
     const k = selected, v = value(h, k), tg = target(h), isDone = done(h, k), s = streak(h, k);
-    let meta = h.days.every(Boolean) ? 'Every day' : h.days.filter(Boolean).length + ' days a week';
+    let meta = h.kind === 'todo' ? 'To-do' : h.days.every(Boolean) ? 'Every day' : h.days.filter(Boolean).length + ' days a week';
+    if (h.kind === 'bad' && h.type === 'check') meta = 'Avoid · ' + meta;
     if (h.type === 'count') meta += ` · ${v} of ${tg}${h.unit ? ' ' + esc(h.unit) : ''}`;
     if (h.type === 'timer') meta += ` · ${v} of ${tg} min`;
     if (h.reminder) meta += ` · ${h.reminder}`;
@@ -141,7 +153,7 @@
     if (h.type === 'check') act = `<button class="chk" data-act="toggle" data-id="${h.id}" aria-label="${isDone ? 'Undo' : 'Done'}"><i>${ic('check', 16)}</i></button>`;
     else if (h.type === 'count') act = `<div class="stepper"><button data-act="dec" data-id="${h.id}" aria-label="Less">${ic('minus', 16)}</button><span>${v}</span><button data-act="inc" data-id="${h.id}" aria-label="More">${ic('plus', 16)}</button></div>`;
     else act = `<button class="chk${isDone ? '' : ' play'}" data-act="timer" data-id="${h.id}" aria-label="Timer"><i>${ic(isDone ? 'check' : 'play', 14)}</i></button>`;
-    return `<div class="row${isDone ? ' is-done' : ''}"><button class="row__lead" data-act="edit" data-id="${h.id}" aria-label="Edit">${ic(h.icon, 20)}</button>
+    return `<div class="row${isDone ? ' is-done' : ''}${h.color ? ' is-tinted' : ''}"${h.color ? ` style="--hc:${h.color}"` : ''}><button class="row__lead" data-act="edit" data-id="${h.id}" aria-label="Edit">${ic(h.icon, 20)}</button>
       <button class="row__body" data-act="edit" data-id="${h.id}"><div class="row__t">${esc(h.name)}</div><div class="row__m"><span>${meta}</span>${s ? `<span class="streak">${ic('flame', 13)}${s}</span>` : ''}</div>${h.type !== 'check' ? `<div class="row__bar" style="--p:${Math.round(ratio(h, k) * 100)}"><i></i></div>` : ''}</button>
       <div class="row__act">${act}</div></div>`;
   }
@@ -225,8 +237,14 @@
 
   let draft;
   function editSheet(h) {
-    draft = h ? JSON.parse(JSON.stringify(h)) : { id: uid(), name: '', icon: 'brain', group: 'Morning', type: 'check', target: 1, unit: '', days: [1, 1, 1, 1, 1, 1, 1], createdAt: today() };
+    draft = h ? JSON.parse(JSON.stringify(h)) : { id: uid(), name: '', icon: 'brain', kind: 'good', color: '', group: 'Morning', type: 'check', target: 1, unit: '', days: [1, 1, 1, 1, 1, 1, 1], createdAt: today() };
     draft._new = !h;
+    renderEditSheet(true);
+  }
+  function fromTemplate(kind, t) {   // t = [name, icon, type, target, unit, group]
+    const k = T[kind] || {};
+    editSheet(null);
+    Object.assign(draft, { name: t[0], icon: t[1], kind, color: k.color || '', type: t[2] || 'check', target: t[3] || (t[2] === 'timer' ? 10 : 1), unit: t[4] || '', group: kind === 'todo' ? 'Anytime' : (t[5] || 'Morning') });
     renderEditSheet(true);
   }
   function renderEditSheet(first) {
@@ -236,16 +254,39 @@
       <div class="panel form">
         <div class="frow"><label for="f-name">Name</label><input type="text" id="f-name" placeholder="Meditate" value="${esc(draft.name)}" autocomplete="off" autocapitalize="sentences"></div>
         <div class="frow frow--col"><label>Icon</label><div class="igrid">${HABIT_ICONS.map(n => `<button class="${n === draft.icon ? 'on' : ''}" data-set="icon" data-v="${n}" aria-label="${n}">${ic(n, 20)}</button>`).join('')}</div></div>
-        <div class="frow frow--col"><label>When</label>${seg('group', GROUPS.map(g => [g, g]))}</div>
-        <div class="frow frow--col"><label>Type</label>${seg('type', [['check', 'Check off'], ['count', 'Count'], ['timer', 'Timer']])}</div>
+        <div class="frow frow--col"><label>Kind</label>${seg('kind', KINDS)}</div>
+        <div class="frow frow--col"><label>Colour</label><div class="swatches"><button class="swatch none${draft.color ? '' : ' on'}" data-set="color" data-v="" aria-label="No colour">${ic('circle-slash', 16)}</button>${COLORS.map(c => `<button class="swatch${c === draft.color ? ' on' : ''}" style="--c:${c}" data-set="color" data-v="${c}" aria-label="${c}"></button>`).join('')}</div></div>
+        ${draft.kind === 'todo' ? '' : `<div class="frow frow--col"><label>When</label>${seg('group', GROUPS.map(g => [g, g]))}</div>`}
+        <div class="frow frow--col"><label>Type</label>${seg('type', [['check', draft.kind === 'bad' ? 'Avoided' : draft.kind === 'todo' ? 'Done' : 'Check off'], ['count', 'Count'], ['timer', 'Timer']])}</div>
         <div id="f-target"></div>
         <div class="frow"><label for="f-r">Reminder</label><input type="time" id="f-r" value="${draft.reminder || ''}"><button class="navbtn small" data-act="clear-r" aria-label="No reminder" ${draft.reminder ? '' : 'hidden'}>${ic('x', 16)}</button></div>
-        <div class="frow frow--col"><label>Days</label><div class="days">${DAYS.map((d, i) => `<button class="dayb${draft.days[i] ? ' on' : ''}" data-day="${i}" aria-label="${d}">${d[0]}</button>`).join('')}</div></div>
+        ${draft.kind === 'todo' ? '' : `<div class="frow frow--col"><label>Days</label><div class="days">${DAYS.map((d, i) => `<button class="dayb${draft.days[i] ? ' on' : ''}" data-day="${i}" aria-label="${d}">${d[0]}</button>`).join('')}</div></div>`}
       </div>
-      <button class="btn" data-act="save">${isNew ? 'Add habit' : 'Save'}</button>
+      <button class="btn" data-act="save">${isNew ? (draft.kind === 'todo' ? 'Add to-do' : 'Add habit') : 'Save'}</button>
       ${isNew ? '' : `<button class="btn btn--2" data-act="archive">${draft.archived ? 'Restore' : 'Archive'}</button><button class="btn btn--danger" data-act="delete">Delete habit and history</button>`}`);
     renderTarget();
     if (first && isNew) setTimeout(() => $('#f-name').focus(), 420);
+  }
+  let tplKind = 'good', tplQuery = '';
+  function templatesSheet() {
+    const q = tplQuery.trim().toLowerCase();
+    const kinds = q ? KINDS.map(k => k[0]) : [tplKind];
+    let list = '';
+    kinds.forEach(kind => {
+      const k = T[kind]; if (!k) return;
+      k.sections.forEach(([title, items]) => {
+        const rows = items.filter(t => !q || t[0].toLowerCase().includes(q));
+        if (!rows.length) return;
+        list += `<div class="eyebrow"><span>${q ? k.label + ' · ' : ''}${title}</span></div><div class="panel">${rows.map((t, i) => `<button class="row tpl" data-act="tpl" data-kind="${kind}" data-i="${k.sections.indexOf(k.sections.find(sec => sec[1] === items))}:${items.indexOf(t)}"${k.color ? ` style="--hc:${k.color}"` : ''}><span class="row__lead">${ic(t[1], 20)}</span><span class="row__body"><span class="row__t">${esc(t[0])}</span></span>${ic('chevron-right', 18, 'chev')}</button>`).join('')}</div>`;
+      });
+    });
+    if (!list) list = `<p class="note">Nothing matches.</p>`;
+    openSheet(`<h2 class="sheet__t"><span>Templates</span><button class="navbtn" data-act="close" aria-label="Close">${ic('x', 22)}</button></h2>
+      <div class="seg tplseg">${KINDS.map(([v, l]) => `<button class="${v === tplKind && !q ? 'on' : ''}" data-act="tpl-kind" data-v="${v}">${l}</button>`).join('')}</div>
+      <div class="search">${ic('search', 18)}<input type="search" id="tpl-q" placeholder="Search templates" value="${esc(tplQuery)}" autocomplete="off"></div>
+      <div class="panel" style="margin-top:14px"><button class="row" data-act="tpl-custom" data-kind="${tplKind}"${(T[tplKind] || {}).color ? ` style="--hc:${T[tplKind].color}"` : ''}><span class="row__lead">${ic(KIND_ICON[tplKind], 20)}</span><span class="row__body"><span class="row__t">${tplKind === 'todo' ? 'Create a custom to-do' : 'Create a custom habit'}</span></span>${ic('chevron-right', 18, 'chev')}</button></div>
+      ${list}`);
+    const inp = $('#tpl-q'); if (q) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
   }
   function renderTarget() {
     const el = $('#f-target'); if (!el) return;
@@ -408,10 +449,13 @@
     const tab = e.target.closest('.tab'); if (tab) { view = tab.dataset.view; render(); return; }
     const el = e.target.closest('[data-act],[data-set],[data-day]'); if (!el) return;
     const act = el.dataset.act, id = el.dataset.id, h = id && state.habits.find(x => x.id === id);
-    if (el.dataset.set) { readDraft(); draft[el.dataset.set] = el.dataset.v; if (el.dataset.set === 'type') draft.target = draft.type === 'timer' ? 10 : 1; renderEditSheet(false); return; }
+    if (el.dataset.set) { readDraft(); draft[el.dataset.set] = el.dataset.v; if (el.dataset.set === 'type') draft.target = draft.type === 'timer' ? 10 : 1; if (el.dataset.set === 'kind') { if (!draft.name && draft._new) draft.color = (T[draft.kind] || {}).color || ''; if (draft.kind === 'todo') { draft.days = [1, 1, 1, 1, 1, 1, 1]; draft.group = 'Anytime'; } } renderEditSheet(false); return; }
     if (el.dataset.day != null) { readDraft(); draft.days[el.dataset.day] = draft.days[el.dataset.day] ? 0 : 1; el.classList.toggle('on'); return; }
     switch (act) {
-      case 'add': editSheet(null); break;
+      case 'add': tplKind = 'good'; tplQuery = ''; templatesSheet(); break;
+      case 'tpl-kind': tplKind = el.dataset.v; tplQuery = ''; templatesSheet(); break;
+      case 'tpl-custom': editSheet(null); draft.kind = el.dataset.kind; draft.color = (T[el.dataset.kind] || {}).color || ''; if (draft.kind === 'todo') draft.group = 'Anytime'; renderEditSheet(true); break;
+      case 'tpl': { const [si, ti] = el.dataset.i.split(':').map(Number); fromTemplate(el.dataset.kind, T[el.dataset.kind].sections[si][1][ti]); break; }
       case 'edit': editSheet(h); break;
       case 'close': closeSheet(); break;
       case 'clear-r': readDraft(); draft.reminder = ''; renderEditSheet(false); break;
@@ -447,6 +491,8 @@
     }
   });
   document.addEventListener('change', e => { if (e.target.id === 'statsHabit') { statsHabit = e.target.value; render(); } });
+  let qTimer = null;
+  document.addEventListener('input', e => { if (e.target.id === 'tpl-q') { clearTimeout(qTimer); const v = e.target.value; qTimer = setTimeout(() => { tplQuery = v; templatesSheet(); }, 250); } });
 
   // ---------- boot ----------
   render();
