@@ -202,7 +202,7 @@
     const t = today();
     for (let i = 0; i < 7; i++) {
       const k = addDays(start, i), p = k <= t ? dayProgress(k, live()) : null, fut = k > t;
-      html += `<button class="day${k === selected ? ' is-sel' : ''}${k === t ? ' is-today' : ''}${fut ? ' is-future' : ''}${p ? ' has-p' : ''}" data-act="pick" data-k="${k}" style="--p:${(p || 0).toFixed(2)}"><span class="day__n">${parse(k).toLocaleDateString(undefined, { weekday: 'short' })}</span><span class="day__r"><i></i>${k === selected ? ring(52, 3.5, p || 0) : ''}<span>${parse(k).getDate()}</span></span></button>`;
+      html += `<button class="day${k === selected ? ' is-sel' : ''}${k === t ? ' is-today' : ''}${fut ? ' is-future' : ''}${p ? ' has-p' : ''}" data-act="pick" data-k="${k}" style="--p:${(p || 0).toFixed(2)}"><span class="day__n">${parse(k).toLocaleDateString(undefined, { weekday: 'short' })}</span><span class="day__r"><i></i>${k === selected && p ? ring(52, 3.5, p) : ''}<span>${parse(k).getDate()}</span></span></button>`;
     }
     return html + '</div>';
   }
@@ -224,8 +224,8 @@
   }
   function listHtml() {
     const hs = dayList(); let html = '';
-    if (!live().length) return html + `<div class="empty"><span class="ico">${ic('cloud-rain', 56)}</span><b>No Habits Yet</b>Tap + to add your first habit.</div>`;
-    if (!hs.length) return html + `<div class="empty"><span class="ico">${ic('cloud-rain', 56)}</span><b>Nothing Here</b>No habits scheduled for this day.</div>`;
+    if (!live().length) return html + `<div class="empty"><span class="ico">${ic('cloud-rain', 64)}</span><b>No Habits Yet</b>Create a habit to start tracking your progress.<button class="pillbtn" data-act="add">${ic('plus', 22)}Create New Habit</button></div>`;
+    if (!hs.length) return html + `<div class="empty"><span class="ico">${ic('cloud-rain', 64)}</span><b>Nothing Here</b>No habits scheduled for this day.</div>`;
     html += '<div class="list">';
     const groups = state.groups.length ? [...state.groups.map(g => [g.name, hs.filter(h => h.group === g.name)]), ['', hs.filter(h => !state.groups.find(g => g.name === h.group))]] : [['', hs]];
     groups.forEach(([g, list]) => { if (!list.length) return; if (g) html += `<h3 style="margin:8px 4px 0;font-size:15px;color:var(--ink-3)">${esc(g)}</h3>`; list.forEach(h => { html += habitCard(h); }); });
@@ -291,6 +291,10 @@
   // is the current; landing on a neighbour moves the selection by a week
   function setupWeekSwipe(layer) {
     const w = layer.querySelector('#weeks'); if (!w) return;
+    // scroll-linked collapse: the strip lifts with the first 43px of scroll (transform only)
+    let raf = null;
+    const collapse = () => { raf = null; const k = Math.min(43, Math.max(0, layer.scrollTop)); w.style.transform = k ? `translateY(${-k}px)` : ''; };
+    layer.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(collapse); }, { passive: true });
     w.scrollLeft = w.clientWidth; let timer = null, armed = false;
     setTimeout(() => { armed = true; }, 150);                 // the programmatic centring above also fires scroll
     w.addEventListener('scroll', () => {
@@ -870,9 +874,9 @@
       d.style.setProperty('--p', (p || 0).toFixed(2)); d.classList.toggle('has-p', !!p);
       const sel = k === selected; d.classList.toggle('is-sel', sel);
       const r = d.querySelector('.day__r'); let svg = r.querySelector('svg');
-      if (sel && !svg) { r.insertAdjacentHTML('afterbegin', ring(52, 3.5, 0)); svg = r.querySelector('svg'); requestAnimationFrame(() => { const pp = svg.querySelector('.p'), len = parseFloat(pp.getAttribute('stroke-dasharray')); pp.setAttribute('stroke-dashoffset', (len * (1 - (p || 0))).toFixed(2)); }); }
+      if (sel && !svg && p) { r.insertAdjacentHTML('afterbegin', ring(52, 3.5, 0)); svg = r.querySelector('svg'); requestAnimationFrame(() => { const pp = svg.querySelector('.p'), len = parseFloat(pp.getAttribute('stroke-dasharray')); pp.setAttribute('stroke-dashoffset', (len * (1 - (p || 0))).toFixed(2)); }); }
       else if (sel && svg) { const pp = svg.querySelector('.p'), len = parseFloat(pp.getAttribute('stroke-dasharray')); pp.setAttribute('stroke-dashoffset', (len * (1 - (p || 0))).toFixed(2)); }
-      else if (!sel && svg) svg.remove();
+      else if ((!sel || !p) && svg) svg.remove();
     });
     const title = cur.querySelector('.hdr__t'); if (title && title.textContent !== todayTitle()) { title.classList.add('swap'); setTimeout(() => { title.textContent = todayTitle(); title.classList.remove('swap'); }, 120); }
   }
