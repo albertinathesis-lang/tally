@@ -125,13 +125,13 @@
     bar.addEventListener('pointerdown', e => {
       if (!e.isPrimary) return;
       const i = TABS.findIndex(t => t[0] === view);
-      drag = { x0: e.clientX, i0: i, moved: false, t0: performance.now(), last: [[e.clientX, performance.now()]] };
-      bar.setPointerCapture(e.pointerId);
+      drag = { x0: e.clientX, i0: i, moved: false, pid: e.pointerId, last: [[e.clientX, performance.now()]] };
     });
     bar.addEventListener('pointermove', e => {
       if (!drag) return;
       const dx = e.clientX - drag.x0;
       if (!drag.moved && Math.abs(dx) < 8) return;
+      if (!drag.moved) { try { bar.setPointerCapture(drag.pid); } catch (x) {} }   // capture only once it is a drag, so taps stay taps
       drag.moved = true;
       drag.last.push([e.clientX, performance.now()]); if (drag.last.length > 6) drag.last.shift();
       const pos = Math.max(0, Math.min(TABS.length - 1, drag.i0 + dx / slot()));
@@ -144,7 +144,7 @@
       e.preventDefault();
       const [x1, t1] = d.last[0], [x2, t2] = d.last[d.last.length - 1];
       const vel = t2 > t1 ? (x2 - x1) / (t2 - t1) : 0;          // px/ms
-      const carry = Math.max(-0.5, Math.min(0.5, vel * 120 / slot()));   // a flick carries at most half a slot
+      const carry = Math.abs(vel) > 0.6 ? Math.max(-0.35, Math.min(0.35, vel * 60 / slot())) : 0;   // only a real flick carries, and not far
       const pos = d.i0 + (e.clientX - d.x0) / slot() + carry;
       const i = Math.max(0, Math.min(TABS.length - 1, Math.round(pos)));
       tabSuppress = performance.now() + 350;                     // the click that follows a drag is not a tap
