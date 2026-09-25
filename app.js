@@ -30,7 +30,8 @@
   function load() {
     let s = null;
     try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
-    if (!s || !s.habits) return { habits: [], log: {} };
+    if (!s || !s.habits) return { habits: [], log: {}, timers: {} };
+    s.timers = s.timers || {};
     s.habits.forEach(h => { if (!I[h.icon]) h.icon = EMOJI_MAP[h.icon] || 'circle-check'; if (!h.kind) h.kind = 'good'; if (h.color == null) h.color = ''; });   // v1 emoji -> line icon
     return s;
   }
@@ -95,7 +96,8 @@
   function render() {
     app.innerHTML = ({ today: renderToday, stats: renderStats, awards: renderAwards, settings: renderSettings })[view]();
     navcT.textContent = view === 'today' ? todayTitle() : TITLES[view];
-    renderTabs();
+    renderTabs(); renderNowBar();
+    if (Object.keys(state.timers).length) ensureTick();
     window.scrollTo(0, 0); onScroll();
   }
   function renderTabs() {
@@ -147,14 +149,15 @@
     let meta = h.kind === 'todo' ? 'To-do' : h.days.every(Boolean) ? 'Every day' : h.days.filter(Boolean).length + ' days a week';
     if (h.kind === 'bad' && h.type === 'check') meta = 'Avoid · ' + meta;
     if (h.type === 'count') meta += ` · ${v} of ${tg}${h.unit ? ' ' + esc(h.unit) : ''}`;
-    if (h.type === 'timer') meta += ` · ${v} of ${tg} min`;
+    if (h.type === 'timer') meta += ` · <span id="el-${h.id}">${running(h) ? fmt(elapsedSec(h)) : fmt(v * 60)} of ${tg} min</span>`;
     if (h.reminder) meta += ` · ${h.reminder}`;
     let act;
     if (h.type === 'check') act = `<button class="chk" data-act="toggle" data-id="${h.id}" aria-label="${isDone ? 'Undo' : 'Done'}"><i>${ic('check', 16)}</i></button>`;
     else if (h.type === 'count') act = `<div class="stepper"><button data-act="dec" data-id="${h.id}" aria-label="Less">${ic('minus', 16)}</button><span>${v}</span><button data-act="inc" data-id="${h.id}" aria-label="More">${ic('plus', 16)}</button></div>`;
-    else act = `<button class="chk${isDone ? '' : ' play'}" data-act="timer" data-id="${h.id}" aria-label="Timer"><i>${ic(isDone ? 'check' : 'play', 14)}</i></button>`;
-    return `<div class="row${isDone ? ' is-done' : ''}${h.color ? ' is-tinted' : ''}"${h.color ? ` style="--hc:${h.color}"` : ''}><button class="row__lead" data-act="edit" data-id="${h.id}" aria-label="Edit">${ic(h.icon, 20)}</button>
-      <button class="row__body" data-act="edit" data-id="${h.id}"><div class="row__t">${esc(h.name)}</div><div class="row__m"><span>${meta}</span>${s ? `<span class="streak">${ic('flame', 13)}${s}</span>` : ''}</div>${h.type !== 'check' ? `<div class="row__bar" style="--p:${Math.round(ratio(h, k) * 100)}"><i></i></div>` : ''}</button>
+    else if (running(h)) act = `<button class="chk run" id="chk-${h.id}" data-act="timer" data-id="${h.id}" aria-label="Stop">${ring(44, 3, elapsedSec(h) / (tg * 60))}<i>${ic('pause', 14)}</i></button>`;
+    else act = `<button class="chk${isDone ? '' : ' play'}" data-act="timer" data-id="${h.id}" aria-label="Start"><i>${ic(isDone ? 'check' : 'play', 14)}</i></button>`;
+    return `<div class="row${isDone ? ' is-done' : ''}${h.color ? ' is-tinted' : ''}${running(h) ? ' is-running' : ''}"${h.color ? ` style="--hc:${h.color}"` : ''}><button class="row__lead" data-act="edit" data-id="${h.id}" aria-label="Edit">${ic(h.icon, 20)}</button>
+      <button class="row__body" data-act="edit" data-id="${h.id}"><div class="row__t">${esc(h.name)}</div><div class="row__m"><span>${meta}</span>${s ? `<span class="streak">${ic('flame', 13)}${s}</span>` : ''}</div>${h.type !== 'check' ? `<div class="row__bar" id="bar-${h.id}" style="--p:${Math.round((h.type === 'timer' && running(h) ? elapsedSec(h) / (tg * 60) : ratio(h, k)) * 100)}"><i></i></div>` : ''}</button>
       <div class="row__act">${act}</div></div>`;
   }
 
@@ -229,7 +232,7 @@
     requestAnimationFrame(() => sheet.classList.add('open'));
   }
   function closeSheet() {
-    stopTimer(); scrim.classList.remove('open');
+    scrim.classList.remove('open');
     sheet.classList.add('closing'); sheet.classList.remove('open');
     closeTimer = setTimeout(() => { sheet.innerHTML = ''; sheet.classList.remove('closing'); }, 320);
   }
@@ -301,24 +304,56 @@
     const r = $('#f-r'); if (r) draft.reminder = r.value || '';
   }
 
-  // ---------- timer ----------
-  let tick = null, timer = null;
-  function timerSheet(h) {
-    timer = { h, k: selected, base: value(h, selected), secs: 0, running: false };
-    openSheet(`<h2 class="sheet__t"><span>${esc(h.name)}</span><button class="navbtn" data-act="close" aria-label="Close">${ic('x', 22)}</button></h2>
-      <div class="timer"><div class="ring" id="t-ring">${ring(220, 10, timer.base / target(h))}<div class="timer__time" id="t-time">00:00</div></div>
-      <div class="timer__sub" id="t-sub">${timer.base} of ${target(h)} minutes today</div>
-      <div class="btns"><button class="btn btn--2" data-act="t-plus">+5 min</button><button class="btn" data-act="t-start">Start</button></div>
-      <button class="btn btn--2" data-act="t-save">Save and close</button></div>`);
+  // ---------- inline timers ----------
+  // A timed habit runs on its own row; several can run at once. What is
+  // running is kept in state.timers as {startedAt, base seconds}, so it
+  // survives a reload and keeps counting in the background. The bar above
+  // the tabs shows every running timer.
+  const fmt = sec => { sec = Math.max(0, Math.round(sec)); const m = Math.floor(sec / 60), s2 = sec % 60; return m + ':' + pad(s2); };
+  const running = h => !!state.timers[h.id];
+  const elapsedSec = h => { const t = state.timers[h.id]; return t ? t.base + (Date.now() - t.startedAt) / 1000 : value(h, selected) * 60; };
+  function startTimer(h) {
+    if (running(h)) return;
+    state.timers[h.id] = { startedAt: Date.now(), base: value(h, today()) * 60, day: today() };
+    save(); render(); ensureTick();
   }
-  function paintTimer() {
-    const m = Math.floor(timer.secs / 60), s = timer.secs % 60;
-    $('#t-time').textContent = pad(m) + ':' + pad(s);
-    const svg = $('#t-ring svg'), c = svg.querySelector('.p'), len = parseFloat(c.getAttribute('stroke-dasharray'));
-    c.setAttribute('stroke-dashoffset', (len * (1 - Math.min(1, (timer.base + timer.secs / 60) / target(timer.h)))).toFixed(2));
+  function stopTimer(h, complete) {
+    const t = state.timers[h.id]; if (!t) return;
+    const sec = complete ? target(h) * 60 : t.base + (Date.now() - t.startedAt) / 1000;
+    delete state.timers[h.id];
+    setValue(h, t.day, Math.round(sec / 6) / 10);          // minutes, one decimal
+    render();
   }
-  function stopTimer() { if (tick) clearInterval(tick); tick = null; if (timer) timer.running = false; }
-  function commitTimer() { if (!timer) return; setValue(timer.h, timer.k, Math.round(timer.base + timer.secs / 60)); }
+  let tick = null;
+  function ensureTick() { if (!tick) tick = setInterval(tickTimers, 1000); }
+  function tickTimers() {
+    const ids = Object.keys(state.timers);
+    if (!ids.length) { clearInterval(tick); tick = null; return; }
+    ids.forEach(id => {
+      const h = state.habits.find(x => x.id === id); if (!h) { delete state.timers[id]; save(); return; }
+      const sec = elapsedSec(h), tg = target(h) * 60;
+      if (sec >= tg) { stopTimer(h, true); celebrate(h); return; }
+      const el = document.getElementById('el-' + id); if (el) el.textContent = fmt(sec) + ' of ' + target(h) + ' min';
+      const bar = document.getElementById('bar-' + id); if (bar) bar.style.setProperty('--p', Math.round(sec / tg * 100));
+      const nb = document.getElementById('nb-' + id); if (nb) nb.textContent = fmt(sec);
+      const ring = document.querySelector('#chk-' + id + ' .p'); if (ring) { const len = parseFloat(ring.getAttribute('stroke-dasharray')); ring.setAttribute('stroke-dashoffset', (len * (1 - sec / tg)).toFixed(2)); }
+    });
+  }
+  function renderNowBar() {
+    const ids = Object.keys(state.timers);
+    const bar = $('#nowbar');
+    bar.hidden = !ids.length;
+    if (!ids.length) return;
+    bar.innerHTML = ids.map(id => { const h = state.habits.find(x => x.id === id); if (!h) return ''; return `<div class="now"${h.color ? ` style="--hc:${h.color}"` : ''}><span class="row__lead">${ic(h.icon, 18)}</span><span class="now__b"><span class="row__t">${esc(h.name)}</span><span class="row__m">${target(h)} min</span></span><b class="now__t" id="nb-${id}">${fmt(elapsedSec(h))}</b><button class="now__stop" data-act="timer" data-id="${id}" aria-label="Stop">${ic('pause', 16)}</button></div>`; }).join('');
+  }
+  // reaching the target: the habit is done, and it earns a moment
+  function celebrate(h) {
+    const best = bestStreak(h), hit = STREAKS.filter(n => best === n)[0];
+    openSheet(`<div class="cheer"><div class="cheer__badge">${ic(hit ? 'flame' : 'flag', 40)}</div>
+      <div class="cheer__n">${hit ? hit + '-day streak' : '100%'}</div>
+      <div class="cheer__t">${esc(h.name)} done${hit ? ' · a new badge' : ''}. Keep it up.</div>
+      <button class="btn" data-act="close">Nice</button><button class="btn btn--2" data-act="go-awards">View achievements</button></div>`);
+  }
 
   // ---------- push (reminders while the app is closed) ----------
   // The phone subscribes to Web Push and keeps its reminder list on the
@@ -378,7 +413,7 @@
     openSheet(`<h2 class="sheet__t"><span>${esc(h.name)}</span><button class="navbtn" data-act="close" aria-label="Close">${ic('x', 22)}</button></h2>
       <p class="note" style="margin:0 4px 16px">${done(h, t) ? 'Done for today.' : (h.type === 'count' ? `${target(h)}${h.unit ? ' ' + esc(h.unit) : ''} today.` : h.type === 'timer' ? `${target(h)} minutes today.` : 'Time for it.')}</p>
       ${done(h, t) ? '' : `<button class="btn" data-act="a-done" data-id="${h.id}">Done</button><button class="btn btn--2" data-act="a-snooze" data-id="${h.id}">In 1 hour</button>`}
-      ${h.type === 'timer' && !done(h, t) ? `<button class="btn btn--2" data-act="timer" data-id="${h.id}">Start the timer</button>` : ''}`);
+      ${h.type === 'timer' && !done(h, t) ? `<button class="btn btn--2" data-act="a-timer" data-id="${h.id}">Start the timer</button>` : ''}`);
   }
   function snooze(h) {
     if (state.push) syncPush({ snooze: { id: h.id, minutes: 60 } });
@@ -465,14 +500,13 @@
       case 'push-off': unsubscribePush(); break;
       case 'a-done': setValue(h, today(), target(h)); closeSheet(); render(); break;
       case 'a-snooze': snooze(h); closeSheet(); break;
+      case 'a-timer': closeSheet(); selected = today(); startTimer(h); break;
       case 'pick': selected = el.dataset.k; render(); break;
       case 'toggle': setValue(h, selected, done(h, selected) ? 0 : 1); render(); break;
       case 'inc': setValue(h, selected, value(h, selected) + 1); render(); break;
       case 'dec': setValue(h, selected, value(h, selected) - 1); render(); break;
-      case 'timer': timerSheet(h); break;
-      case 't-start': if (timer.running) { stopTimer(); el.textContent = 'Start'; } else { timer.running = true; el.textContent = 'Pause'; tick = setInterval(() => { timer.secs++; paintTimer(); }, 1000); } break;
-      case 't-plus': timer.secs += 300; paintTimer(); break;
-      case 't-save': commitTimer(); closeSheet(); render(); break;
+      case 'timer': if (running(h)) stopTimer(h); else if (!done(h, today())) { selected = today(); startTimer(h); } break;
+      case 'go-awards': closeSheet(); view = 'awards'; render(); break;
       case 'save': {
         readDraft(); if (!draft.name) { $('#f-name').focus(); return; }
         if (!draft.days.some(Boolean)) draft.days = [1, 1, 1, 1, 1, 1, 1];
@@ -487,7 +521,7 @@
       case 'export': { const blob = new Blob([JSON.stringify(state, null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'tally-' + today() + '.json'; a.click(); break; }
       case 'import': { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/json'; inp.onchange = () => { const f = inp.files[0]; if (!f) return; f.text().then(txt => { try { const s = JSON.parse(txt); if (!s.habits || !s.log) throw 0; if (confirm('Replace all current data with this file?')) { localStorage.setItem(KEY, JSON.stringify(s)); state = load(); render(); } } catch (x) { alert('That is not a Tally export.'); } }); }; inp.click(); break; }
       case 'archived': { const a = state.habits.filter(x => x.archived); openSheet(`<h2 class="sheet__t"><span>Archived</span><button class="navbtn" data-act="close" aria-label="Close">${ic('x', 22)}</button></h2>${a.length ? `<div class="panel">${a.map(x => `<button class="row" data-act="edit" data-id="${x.id}"><span class="row__lead">${ic(x.icon, 20)}</span><span class="row__body"><div class="row__t">${esc(x.name)}</div><div class="row__m">${completions(x)} completions</div></span>${ic('chevron-right', 18, 'chev')}</button>`).join('')}</div>` : '<p class="note">Nothing archived.</p>'}`); break; }
-      case 'wipe': if (confirm('Delete every habit and all history on this device?')) { state = { habits: [], log: {} }; save(); render(); } break;
+      case 'wipe': if (confirm('Delete every habit and all history on this device?')) { state = { habits: [], log: {}, timers: {} }; save(); render(); } break;
     }
   });
   document.addEventListener('change', e => { if (e.target.id === 'statsHabit') { statsHabit = e.target.value; render(); } });
