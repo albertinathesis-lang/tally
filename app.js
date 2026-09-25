@@ -505,7 +505,8 @@
   const row = (act, ico, bg, label, val, extra = '') => `<button class="row" data-act="${act}" ${extra}><span class="row__ico" style="background:${bg}">${ico}</span><span class="row__t">${label}</span><span class="row__v">${val || ''}</span>${ic('chevron-right', 18, 'chev')}</button>`;
   const unitLabel = d => d.type === 'timer' ? 'minutes' : (d.unit && d.unit !== 'Count' ? d.unit : '');
   const repText = d => d.everyN ? `Every ${d.everyN} days` : d.days.every(Boolean) ? 'Every day' : d.days.filter(Boolean).length + ' days a week';
-  const previewCard = d => `<section class="card pv-off" style="--c:${d.color};margin-top:10px"><div class="card__head"><span class="card__ico">${emojiOf(d)}</span><span class="card__txt"><div class="card__name">${d.name ? esc(d.name) : '<span style="opacity:.45">Habit name</span>'}</div><div class="card__sub">${repText(d)}${d.type !== 'check' ? `, ${d.target} ${unitLabel(d)}` : ''}</div></span><span class="card__act">${ic('plus', 26)}</span></div></section>`;
+  // the preview card at the top of Add Habit; with edit=true the name line is the text field itself
+  const previewCard = (d, edit) => `<section class="card pv-off" style="--c:${d.color};margin-top:10px"><div class="card__head"><span class="card__ico">${emojiOf(d)}</span><span class="card__txt"><div class="card__name">${edit ? `<input class="namefield" id="f-name" value="${esc(d.name)}" placeholder="Habit name" autocomplete="off" enterkeyhint="done" maxlength="100">` : (d.name ? esc(d.name) : '<span style="opacity:.45">Habit name</span>')}</div><div class="card__sub">${repText(d)}${d.type !== 'check' ? `, ${d.target} ${unitLabel(d)}` : ''}</div></span>${edit ? `<span class="card__pen">${ic('pencil', 16)}</span>` : ''}<span class="card__act">${ic('plus', 26)}</span></div></section>`;
   const TYPES = [['good', 'Good', 'circle-check', 'var(--green)', 'Starts as not completed. Each mark increases the habit value.'], ['bad', 'Bad', 'circle-minus', 'var(--red)', 'A bad habit has two statuses: completed or missed. Completed: total logged value is 0 or within the goal. Missed: total logged value exceeds the goal. At the end of each period, if the total is 0 or within the goal, the habit is automatically marked as completed.'], ['track', 'Track', 'smile', 'var(--orange)', 'A habit without a goal, reminders, or missed badge.'], ['todo', 'To-Do', 'circle-dot', 'var(--blue)', 'One-time habit that disappears after completion.']];
   const emptyState = (title, text, btn) => `<div class="empty"><span class="ico">${ic('cloud-rain', 56)}</span><b>${title}</b>${text}${btn ? `<div style="margin-top:18px">${btn}</div>` : ''}</div>`;
   const minusBtn = attrs => `<button class="minus" ${attrs} style="width:22px;height:22px;border-radius:50%;background:var(--red);color:#fff;display:grid;place-items:center">${ic('minus', 14)}</button>`;
@@ -515,7 +516,7 @@
       case 'edit': {
         const isNew = d._new;
         return pageT(isNew ? 'Add Habit' : 'Edit Habit', undefined, `<button class="r circ" style="background:${d.name ? 'var(--green)' : 'rgba(120,120,128,.25)'};color:#fff" data-act="save" aria-label="Save">${ic('check', 24)}</button>`) + `<div class="pg">
-          <div style="position:relative" class="namewrap">${previewCard(d)}<input class="field" id="f-name" value="${esc(d.name)}" placeholder="Habit name" autocomplete="off" enterkeyhint="done" style="position:absolute;left:64px;top:22px;width:calc(100% - 140px);padding:0;font-size:20px;font-weight:600;background:transparent"><span style="position:absolute;right:72px;top:30px;color:var(--ink-3)">${ic('pencil', 16)}</span></div>
+          ${previewCard(d, true)}
           <p class="note" style="text-align:right;margin-top:6px" id="f-count">${d.name.length}/100</p>
           <h3>Appearance</h3><div class="grp">
             ${row('go', ic('palette', 16), '#af52de', 'Color', `<span class="dot" style="background:${d.color}"></span>${ic('chevrons-up-down', 16)}`, 'data-p="edit-color"')}
@@ -1088,7 +1089,7 @@
   let qTimer = null;
   document.addEventListener('input', e => {
     if (e.target.id === 'tpl-q') { clearTimeout(qTimer); const v = e.target.value; qTimer = setTimeout(() => { tplQuery = v; templatesSheet(); }, 250); }
-    if (e.target.id === 'f-name' && draft) { draft.name = e.target.value.slice(0, 100); const c = document.querySelector('.pg .card__name'); if (c) c.innerHTML = draft.name ? esc(draft.name) : '<span style="opacity:.45">Habit name</span>'; const b = document.querySelector('.page-t .r'); if (b) b.style.background = draft.name ? 'var(--green)' : 'rgba(120,120,128,.25)'; const n = $('#f-count'); if (n) n.textContent = draft.name.length + '/100'; }
+    if (e.target.id === 'f-name' && draft) { draft.name = e.target.value.slice(0, 100); const b = document.querySelector('.page-t .r'); if (b) b.style.background = draft.name ? 'var(--green)' : 'rgba(120,120,128,.25)'; const n = $('#f-count'); if (n) n.textContent = draft.name.length + '/100'; }
     if (e.target.id === 'hsearch') { const q = e.target.value.toLowerCase(); document.querySelectorAll('#hsearch-out .row').forEach(r => { r.hidden = q && !r.textContent.toLowerCase().includes(q); }); }
   });
 

@@ -100,7 +100,9 @@ html.custom-bg .layer:not(.today) { background: linear-gradient(180deg, var(--bg
 .card__badge { position: absolute; top: 9px; left: 12px; display: flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 600; }
 .card__badge.neg { color: #ff3b30; }
 .ic.fill { fill: currentColor; }
-.namewrap .card__name { visibility: hidden; }
+.namefield { width: 100%; border: 0; background: transparent; padding: 0; margin: 0; font: inherit; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: inherit; outline: none; }
+.namefield::placeholder { color: inherit; opacity: .45; }
+.card__pen { color: inherit; opacity: .8; margin-right: 4px; }
 .card.is-done .card__badge.neg { color: #fff; }
 .card__head { display: flex; align-items: center; height: 66px; padding: 6px 16px 0 20px; gap: 12px; }
 .card__ico { width: 30px; height: 30px; display: grid; place-items: center; font-size: 24px; flex: none; }

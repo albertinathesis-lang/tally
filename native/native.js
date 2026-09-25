@@ -7,6 +7,8 @@
   const C = window.Capacitor;
   if (!C || !C.isNativePlatform || !C.isNativePlatform()) return;
   const LN = C.Plugins.LocalNotifications, H = C.Plugins.Haptics, SB = C.Plugins.StatusBar;
+  const KB = C.Plugins.Keyboard;
+  try { if (KB) KB.setAccessoryBarVisible({ isVisible: false }); } catch (e) {}
   const N = window.TALLY_NATIVE = { isNative: true, handlers: {} };
 
   N.tap = () => { try { H.impact({ style: 'LIGHT' }); } catch (e) {} };
