@@ -42,8 +42,8 @@ input, textarea, select { font-size: 16px; }
 /* ---- app shell ---- */
 /* the app is its own scroller; header, week strip and tab bar are pinned to the viewport and never bounce */
 .app { position: fixed; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: calc(110px + var(--sab)); }
-.app.today { padding-top: calc(var(--sat) + 132px); }
-.hdr { position: fixed; top: 0; left: 0; right: 0; z-index: 40; padding: calc(var(--sat) + 4px) 20px 0; height: calc(var(--sat) + 52px); display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+.app.today { padding-top: calc(var(--sat) + 95px); }
+.hdr { position: fixed; top: 0; left: 0; right: 0; z-index: 40; padding: var(--sat) 20px 0; height: calc(var(--sat) + 44px); display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
 .hdr > * { pointer-events: auto; }
 .hdr__t { position: absolute; left: 0; right: 0; text-align: center; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; pointer-events: none; }
 .hdr__pill { display: flex; height: 44px; border-radius: 22px; padding: 0 6px; }
@@ -55,8 +55,8 @@ input, textarea, select { font-size: 16px; }
 .page-t .r.txt { top: calc(var(--sat) + 12px); font-size: 17px; font-weight: 600; color: var(--accent); }
 
 /* ---- week strip ---- */
-.week { display: flex; padding: calc(var(--sat) + 24px) 0 0; height: calc(var(--sat) + 132px); }
-.day { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.week { display: flex; padding: calc(var(--sat) + 16px) 0 0; height: calc(var(--sat) + 92px); }
+.day { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .day__n { font-size: 13px; color: var(--ink-3); }
 .day__r { position: relative; width: 44px; height: 44px; display: grid; place-items: center; font-size: 15px; font-weight: 400; color: var(--ink-2); border-radius: 50%; }
 .day__r i { position: absolute; inset: 0; border-radius: 50%; background: var(--accent); opacity: 0; transform: scale(.4); transition: transform .3s var(--ease-out), opacity .3s; }
@@ -68,12 +68,12 @@ input, textarea, select { font-size: 16px; }
 .day.is-sel .day__r svg { position: absolute; inset: -4px; width: 52px; height: 52px; }
 .day.is-sel .day__r svg .t { stroke: rgba(255,255,255,.35); } .day.is-sel .day__r svg .p { stroke: #fff; stroke-linecap: round; }
 .day.is-future .day__r { color: var(--ink-4); }
-.week-wrap { position: fixed; top: 0; left: 0; right: 0; z-index: 39; height: calc(var(--sat) + 132px); overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; display: flex; -webkit-mask-image: linear-gradient(#000 82%, transparent); mask-image: linear-gradient(#000 82%, transparent); background: color-mix(in srgb, var(--bg-start) 70%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.week-wrap { position: fixed; top: 0; left: 0; right: 0; z-index: 39; height: calc(var(--sat) + 92px); overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; display: flex; -webkit-mask-image: linear-gradient(#000 82%, transparent); mask-image: linear-gradient(#000 82%, transparent); background: color-mix(in srgb, var(--bg-start) 70%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
 .week-wrap::-webkit-scrollbar { display: none; }
 .week-wrap .week { flex: 0 0 100%; scroll-snap-align: start; }
 
 /* ---- habit cards ---- */
-.list { padding: 0 16px 0; display: flex; flex-direction: column; gap: 10px; }
+.list { padding: 4px 16px 0; display: flex; flex-direction: column; gap: 10px; }
 .card { position: relative; width: 100%; border-radius: var(--card-r); overflow: hidden; color: var(--ink); --c: #34c759; background: color-mix(in srgb, var(--c) 34%, var(--glass)); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.4); }
 .card.is-done { background: var(--c); color: #fff; box-shadow: none; }
 .card.is-run { background: color-mix(in srgb, var(--c) 34%, var(--glass)); }
