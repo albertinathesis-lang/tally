@@ -318,6 +318,39 @@
     delete state.push; save(); render();
   }
 
+  // ---------- notification actions ----------
+  // "Done" on a notification (where the platform shows buttons) is recorded
+  // by the service worker; the app applies it here. Tapping the notification
+  // body opens the app on that habit with the same two choices, which is
+  // what iPhone gets, since it shows no buttons on web notifications.
+  async function applyPending() {
+    try {
+      const c = await caches.open('tally-pending'); const r = await c.match('pending'); if (!r) return;
+      const list = await r.json(); await c.delete('pending');
+      list.forEach(it => { const h = state.habits.find(x => x.id === it.id); if (h && it.type === 'done' && !done(h, it.date)) setValue(h, it.date, target(h)); });
+      render();
+    } catch (e) {}
+  }
+  function actionSheet(id) {
+    const h = state.habits.find(x => x.id === id); if (!h) return;
+    const t = today();
+    openSheet(`<h2 class="sheet__t"><span>${esc(h.name)}</span><button class="navbtn" data-act="close" aria-label="Close">${ic('x', 22)}</button></h2>
+      <p class="note" style="margin:0 4px 16px">${done(h, t) ? 'Done for today.' : (h.type === 'count' ? `${target(h)}${h.unit ? ' ' + esc(h.unit) : ''} today.` : h.type === 'timer' ? `${target(h)} minutes today.` : 'Time for it.')}</p>
+      ${done(h, t) ? '' : `<button class="btn" data-act="a-done" data-id="${h.id}">Done</button><button class="btn btn--2" data-act="a-snooze" data-id="${h.id}">In 1 hour</button>`}
+      ${h.type === 'timer' && !done(h, t) ? `<button class="btn btn--2" data-act="timer" data-id="${h.id}">Start the timer</button>` : ''}`);
+  }
+  function snooze(h) {
+    if (state.push) syncPush({ snooze: { id: h.id, minutes: 60 } });
+    else setTimeout(() => { if (!done(h, today())) notify(h, 'Time for it.'); }, 60 * 60 * 1000);
+  }
+  navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', e => {
+    const m = e.data || {};
+    if (m.type === 'open-habit') { selected = today(); view = 'today'; render(); actionSheet(m.id); }
+    if (m.type === 'done') applyPending();
+  });
+  const fromNotif = new URLSearchParams(location.search).get('habit');
+  if (fromNotif) history.replaceState(null, '', location.pathname);
+
   // ---------- reminders ----------
   // A habit can carry a time. While Tally is open (or in the background on
   // platforms that keep web apps alive), the minute comes round and a
@@ -368,7 +401,7 @@
     if (changed) save();
   }
   setInterval(checkReminders, 20000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { checkReminders(); render(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { checkReminders(); applyPending(); } });
 
   // ---------- events ----------
   document.addEventListener('click', e => {
@@ -386,6 +419,8 @@
       case 'notif-test': if (state.push) syncPush({ test: true }); else notify({ name: 'Tally', id: 'test' }, 'This is what a reminder looks like.'); break;
       case 'push-on': subscribePush().then(render).catch(e => { console.warn(e); alert('Could not turn on reminders. Is Tally on the Home Screen?'); }); break;
       case 'push-off': unsubscribePush(); break;
+      case 'a-done': setValue(h, today(), target(h)); closeSheet(); render(); break;
+      case 'a-snooze': snooze(h); closeSheet(); break;
       case 'pick': selected = el.dataset.k; render(); break;
       case 'toggle': setValue(h, selected, done(h, selected) ? 0 : 1); render(); break;
       case 'inc': setValue(h, selected, value(h, selected) + 1); render(); break;
@@ -415,5 +450,6 @@
 
   // ---------- boot ----------
   render();
+  applyPending().then(() => { if (fromNotif) actionSheet(fromNotif); });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();

@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
   webpush.setVapidDetails(conf.vapid_subject, conf.vapid_public, conf.vapid_private);
 
   let body: any = {}; try { body = await req.json(); } catch {}
-  const q = db.from("push_subscriptions").select("endpoint,keys,tz,reminders,done,sent");
+  const q = db.from("push_subscriptions").select("endpoint,keys,tz,reminders,done,sent,snoozes");
   const { data: subs, error } = body.test ? await q.eq("endpoint", body.test) : await q;
   if (error) return json({ error: error.message }, 500);
 
@@ -28,7 +28,14 @@ Deno.serve(async (req) => {
     const doneToday = s.done && s.done.date === local.date ? s.done.ids as string[] : [];
     let due: any[];
     if (body.test) due = [{ id: "test", name: "Tally", body: "Reminders are on. This one came from the server." }];
-    else due = (s.reminders || []).filter((r: any) => r.time === local.hm && r.days[local.dow] && !doneToday.includes(r.id) && !sentToday.includes(r.id));
+    else {
+      due = (s.reminders || []).filter((r: any) => r.time === local.hm && r.days[local.dow] && !doneToday.includes(r.id) && !sentToday.includes(r.id));
+      // snoozed ones come back at their minute (or the first tick after it), once
+      const ripe = (s.snoozes || []).filter((z: any) => z.date === local.date && z.at <= local.hm && !doneToday.includes(z.id));
+      const byId: Record<string, any> = {}; (s.reminders || []).forEach((r: any) => byId[r.id] = r);
+      ripe.forEach((z: any) => { if (byId[z.id] && !due.some((d: any) => d.id === z.id)) due.push(byId[z.id]); });
+      if (ripe.length) await db.from("push_subscriptions").update({ snoozes: (s.snoozes || []).filter((z: any) => !ripe.includes(z)) }).eq("endpoint", s.endpoint);
+    }
     checked += (s.reminders || []).length;
     for (const r of due) {
       try {
