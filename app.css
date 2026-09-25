@@ -41,7 +41,7 @@ input, textarea, select { font-size: 16px; }
 .app { min-height: 100dvh; padding-bottom: calc(110px + var(--sab)); }
 .hdr { position: fixed; top: 0; left: 0; right: 0; z-index: 40; padding: calc(var(--sat) + 4px) 20px 0; height: calc(var(--sat) + 52px); display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
 .hdr > * { pointer-events: auto; }
-.hdr__t { position: absolute; left: 0; right: 0; text-align: center; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; pointer-events: none; }
+.hdr__t { position: absolute; left: 0; right: 0; text-align: center; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; pointer-events: none; }
 .hdr__pill { display: flex; height: 44px; border-radius: 22px; padding: 0 6px; }
 .hdr__pill button { width: 44px; height: 44px; display: grid; place-items: center; color: var(--ink); }
 .hdr__r { display: flex; gap: 10px; }
@@ -54,7 +54,7 @@ input, textarea, select { font-size: 16px; }
 .week { display: flex; padding: calc(var(--sat) + 24px) 0 0; height: calc(var(--sat) + 86px); }
 .day { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .day__n { font-size: 13px; color: var(--ink-3); }
-.day__r { position: relative; width: 44px; height: 44px; display: grid; place-items: center; font-size: 17px; font-weight: 400; color: var(--ink-2); border-radius: 50%; }
+.day__r { position: relative; width: 44px; height: 44px; display: grid; place-items: center; font-size: 15px; font-weight: 400; color: var(--ink-2); border-radius: 50%; }
 .day__r i { position: absolute; inset: 0; border-radius: 50%; background: var(--accent); opacity: 0; transform: scale(.4); transition: transform .3s var(--ease-out), opacity .3s; }
 .day__r span { position: relative; }
 .day.has-p .day__r i { opacity: .28; transform: scale(calc(.55 + .45 * var(--p, 0))); }
@@ -80,12 +80,12 @@ input, textarea, select { font-size: 16px; }
 .ic.fill { fill: currentColor; }
 .namewrap .card__name { visibility: hidden; }
 .card.is-done .card__badge.neg { color: #fff; }
-.card__head { display: flex; align-items: center; height: 72px; padding: 6px 16px 0 20px; gap: 12px; }
-.card__ico { width: 32px; height: 32px; display: grid; place-items: center; font-size: 26px; flex: none; }
+.card__head { display: flex; align-items: center; height: 66px; padding: 6px 16px 0 20px; gap: 12px; }
+.card__ico { width: 30px; height: 30px; display: grid; place-items: center; font-size: 24px; flex: none; }
 .card__ico .ic { width: 28px; height: 28px; }
 .card__txt { flex: 1; min-width: 0; }
-.card__name { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card__sub { font-size: 15px; line-height: 1.2; margin-top: 1px; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card__name { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card__sub { font-size: 13px; line-height: 1.2; margin-top: 1px; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card__act { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; position: relative; flex: none; color: var(--ink); }
 .card__act::before { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid color-mix(in srgb, var(--c) 45%, #fff); }
 .card.is-done .card__act { background: #fff; color: var(--c); } .card.is-done .card__act::before { display: none; }
@@ -97,9 +97,9 @@ input, textarea, select { font-size: 16px; }
 .heat__g { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 7.6px); grid-auto-columns: 7.6px; gap: 1.6px; }
 .heat__g i { border-radius: 1.6px; background: color-mix(in srgb, var(--c) 42%, transparent); }
 .card.is-done .heat__g i { background: rgba(255,255,255,.16); }
-.heat__g i.d { background: #fff; }
+.card .heat__g i.d, .card.is-done .heat__g i.d { background: #fff; }
 .heat__g i.n { background: transparent; }
-.heat__m { position: absolute; top: 71px; font-size: 13px; opacity: .95; }
+.heat__m { position: absolute; top: 70px; font-size: 12px; opacity: .95; }
 /* bars view: last 8 days */
 .bars { display: flex; gap: 6px; margin: 0 14px; height: 92px; padding-top: 4px; }
 .bars > div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -112,6 +112,7 @@ input, textarea, select { font-size: 16px; }
 .line svg { width: 100%; height: 66px; display: block; overflow: visible; }
 .line .lbl { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 8px 0; }
 .card.pv-off { height: 64px; } .card.pv-off .card__head { height: 64px; padding-top: 0; }
+.hdr__pill button .ic { width: 22px; height: 22px; }
 .caption { text-align: center; font-size: 12px; color: var(--ink-4); padding: 14px 0 0; }
 .empty { text-align: center; padding: 120px 40px 0; color: var(--ink-3); font-size: 15px; line-height: 1.5; }
 .empty b { display: block; font-size: 20px; color: var(--ink); margin: 14px 0 6px; }

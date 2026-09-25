@@ -230,13 +230,15 @@
   // 40 weeks ending with the current week, seven rows Monday..Sunday
   function heat(h) {
     const end = weekStartOf(today()), start = addDays(end, -39 * 7), t = today();
-    let cells = '', months = '', lastM = -1;
+    let cells = '', lastM = -1; const labels = [];
     for (let c = 0; c < 40; c++) for (let r = 0; r < 7; r++) {
       const k = addDays(start, c * 7 + r);
       const m = parse(k).getMonth();
-      if (r === 0 && m !== lastM && c < 38) { months += `<span class="heat__m" style="left:${(c * 9.2 + 4).toFixed(1)}px">${parse(k).toLocaleDateString(undefined, { month: 'short' })}</span>`; lastM = m; }
+      if (r === 0 && m !== lastM) { labels.push([c, parse(k).toLocaleDateString(undefined, { month: 'short' })]); lastM = m; }
       cells += k > t ? '<i class="n"></i>' : done(h, k) ? '<i class="d"></i>' : '<i></i>';
     }
+    // a label needs three columns of room; a cramped first or last one is dropped
+    const months = labels.filter(([c], i) => (i === labels.length - 1 || labels[i + 1][0] - c >= 3) && c <= 37).map(([c, l]) => `<span class="heat__m" style="left:${(c * 9.2 + 2).toFixed(1)}px">${l}</span>`).join('');
     return `<div class="heat"><div class="heat__g">${cells}</div>${months}</div>`;
   }
   function bars(h) {
