@@ -218,7 +218,7 @@ input, select { font: inherit; color: inherit; }
 
 /* ---- inline timers: running row, the bar above the tabs, the cheer ---- */
 .chk.run { position: relative; }
-.chk.run svg { position: absolute; inset: 0; } .chk.run .t { stroke: var(--track); } .chk.run .p { stroke: var(--hc, var(--accent)); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.chk.run > svg { position: absolute; inset: 0; } .chk.run .t { stroke: var(--track); } .chk.run .p { stroke: var(--hc, var(--accent)); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
 .chk.run i { border-color: transparent; color: var(--hc, var(--accent)); }
 .row.is-running .row__bar i { transition: width 1s linear; }
 .nowbar { position: fixed; left: 16px; right: 16px; bottom: calc(var(--sab) + 12px + 66px + 8px); z-index: 39; border-radius: var(--r-panel); border: 1px solid var(--hairline); box-shadow: var(--sh-panel); overflow: hidden; }
