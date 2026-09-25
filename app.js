@@ -126,7 +126,9 @@
   const live = () => state.habits.filter(h => !h.archived);
 
   // ---------- rendering ----------
-  const $ = s => document.querySelector(s);
+  let cur = null;                                          // the layer on screen
+  const $ = s => (cur && cur.querySelector(s)) || document.querySelector(s);
+  const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const app = $('#app'), sheet = $('#sheet'), scrim = $('#scrim');
   let view = 'today', selected = today(), stack = [];         // stack: pushed pages over the tab
@@ -147,17 +149,41 @@
   }
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { applyTheme(); });
 
-  function render() {
-    applyTheme();
-    closeMenu();
-    const top = stack[stack.length - 1];
-    app.innerHTML = top ? renderPage(top) : ({ today: renderToday, stats: renderStats, sharing: renderSharing, settings: renderSettings })[view]();
-    $('#tabbar').hidden = !!top; $('#navc').hidden = true; app.classList.toggle('today', !top && view === 'today');
+  const VIEWS = { today: () => renderToday(), stats: () => renderStats(), sharing: () => renderSharing(), settings: () => renderSettings() };
+  // render(nav): nav is 'push' | 'pop' (a page slides over / off, iOS style),
+  // 'fade' (tab switch, a short crossfade) or nothing (in place). Each screen
+  // is a .layer that scrolls on its own; the old layer leaves once the
+  // transition ends.
+  function render(nav) {
+    applyTheme(); closeMenu();
+    const top = stack[stack.length - 1], isToday = !top && view === 'today';
+    const layer = document.createElement('div'); layer.className = 'layer' + (isToday ? ' today' : '');
+    const prev = cur;
+    cur = layer;
+    layer.innerHTML = top ? renderPage(top) : VIEWS[view]();
+    const rm = reduceMotion();
+    if (prev && prev.isConnected && nav && !rm) {
+      prev.classList.add('out'); prev.style.pointerEvents = 'none';
+      if (nav === 'push') {
+        layer.classList.add('from-right'); app.appendChild(layer);
+        requestAnimationFrame(() => requestAnimationFrame(() => { layer.classList.remove('from-right'); prev.classList.add('to-left'); }));
+        setTimeout(() => prev.remove(), 420);
+      } else if (nav === 'pop') {
+        layer.classList.add('to-left'); app.insertBefore(layer, prev); prev.classList.add('top');
+        requestAnimationFrame(() => requestAnimationFrame(() => { layer.classList.remove('to-left'); prev.classList.add('from-right'); }));
+        setTimeout(() => prev.remove(), 420);
+      } else {
+        layer.classList.add('fade-in'); app.appendChild(layer);
+        requestAnimationFrame(() => requestAnimationFrame(() => { layer.classList.remove('fade-in'); prev.classList.add('fade-out'); }));
+        setTimeout(() => prev.remove(), 200);
+      }
+    } else { app.innerHTML = ''; app.appendChild(layer); if (prev && prev.isConnected) prev.remove(); }
+    if (isToday && (!prev || !prev.classList.contains('today') || nav)) { const l = layer.querySelector('.list'); if (l) { l.classList.add('enter'); [...l.children].forEach((c, i) => c.style.setProperty('--i', Math.min(i, 8))); } }
+    $('#tabbar').hidden = !!top; $('#navc').hidden = true;
     renderTabs(); renderNowBar();
     if (Object.keys(state.timers).length) ensureTick();
-    if (!top && view === 'today') setupWeekSwipe();
+    if (isToday) setupWeekSwipe(layer);
     if (top && top.p === 'reorder') setupReorder();
-    app.scrollTop = 0;
   }
   const TABS = [['today', 'list-checks', 'Habits'], ['stats', 'chart-no-axes-column', 'Statistics'], ['sharing', 'users', 'Sharing'], ['settings', 'settings', 'Settings']];
   function renderTabs() {
@@ -166,7 +192,7 @@
     bar.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.view === view));
     bar.querySelector('.tabbar__glass').style.transform = `translateX(${TABS.findIndex(t => t[0] === view) * 100}%)`;
   }
-  const push = p => { stack.push(p); render(); };
+  const push = p => { stack.push(p); render('push'); };
   const pageT = (title, left, right) => `<div class="page-t glass">${left || `<button class="l circ" data-act="pop" aria-label="Back">${ic('chevron-left', 24)}</button>`}<span>${title}</span>${right || ''}</div>`;
   const todayTitle = () => { const t = today(); return selected === t ? 'Today' : selected === addDays(t, -1) ? 'Yesterday' : selected === addDays(t, 1) ? 'Tomorrow' : parse(selected).toLocaleDateString(undefined, { weekday: 'long' }); };
 
@@ -182,14 +208,22 @@
   }
   function renderToday() {
     const s = S(), ws = weekStartOf(selected);
-    let html = `<div class="hdr"><div class="hdr__pill glass"><button data-act="menu-list" aria-label="Sort and filter">${ic('list', 24)}</button><button data-act="reorder" aria-label="Reorder">${ic('align-justify', 24)}</button></div><div class="hdr__t">${todayTitle()}</div><div class="hdr__r"><button class="circ tint glass" data-act="add" aria-label="New habit">${ic('plus', 26)}</button><button class="circ glass" data-act="search" aria-label="Search">${ic('search', 22)}</button></div></div>`;
-    html += `<div class="week-wrap" id="weeks">${weekStrip(addDays(ws, -7))}${weekStrip(ws)}${weekStrip(addDays(ws, 7))}</div>`;
+    let html = `<div class="topblock"><div class="hdr"><div class="hdr__pill glass"><button data-act="menu-list" aria-label="Sort and filter">${ic('list', 24)}</button><button data-act="reorder" aria-label="Reorder">${ic('align-justify', 24)}</button></div><div class="hdr__t">${todayTitle()}</div><div class="hdr__r"><button class="circ tint glass" data-act="add" aria-label="New habit">${ic('plus', 26)}</button><button class="circ glass" data-act="search" aria-label="Search">${ic('search', 22)}</button></div></div>`;
+    html += `<div class="week-wrap" id="weeks">${weekStrip(addDays(ws, -7))}${weekStrip(ws)}${weekStrip(addDays(ws, 7))}</div></div>`;
+    return html + listHtml();
+  }
+  function dayList() {
+    const s = S();
     let hs = live().filter(h => scheduled(h, selected));
     if (s.hideDone) hs = hs.filter(h => !done(h, selected));
     if (s.hideFailed) hs = hs.filter(h => !failed(h, selected));
     if (s.hideSkipped) hs = hs.filter(h => !skipped(h, selected));
     if (s.sort === 'completedLast') hs = [...hs.filter(h => !done(h, selected)), ...hs.filter(h => done(h, selected))];
     else if (s.sort === 'progress') hs = hs.slice().sort((a, b) => ratio(b, selected) - ratio(a, selected));
+    return hs;
+  }
+  function listHtml() {
+    const hs = dayList(); let html = '';
     if (!live().length) return html + `<div class="empty"><span class="ico">${ic('cloud-rain', 56)}</span><b>No Habits Yet</b>Tap + to add your first habit.</div>`;
     if (!hs.length) return html + `<div class="empty"><span class="ico">${ic('cloud-rain', 56)}</span><b>Nothing Here</b>No habits scheduled for this day.</div>`;
     html += '<div class="list">';
@@ -255,8 +289,8 @@
   }
   // the week strip pages by week: three weeks are laid out, the middle one
   // is the current; landing on a neighbour moves the selection by a week
-  function setupWeekSwipe() {
-    const w = $('#weeks'); if (!w) return;
+  function setupWeekSwipe(layer) {
+    const w = layer.querySelector('#weeks'); if (!w) return;
     w.scrollLeft = w.clientWidth; let timer = null, armed = false;
     setTimeout(() => { armed = true; }, 150);                 // the programmatic centring above also fires scroll
     w.addEventListener('scroll', () => {
@@ -278,15 +312,29 @@
     const val = isTimer ? fmtClock(run ? elapsedSec(h) : v * 60) : fmtNum(v);
     openSheet(`<div class="sheet__hdr"><button class="circ glass" data-act="close" aria-label="Close">${ic('x', 24)}</button><div class="r"><button class="circ glass" data-act="note" data-id="${h.id}" aria-label="Note">${ic('notebook-pen', 22)}</button><button class="circ glass" data-act="more" data-id="${h.id}" aria-label="More">${ic('ellipsis', 22)}</button></div></div>
       <div class="det"><div class="det__name">${emojiOf(h)}<span>${esc(h.name)}</span></div><div class="det__sub">${subtitle(h, k).split(',')[0]}</div>
-        <div class="det__ringrow">${done(h, k) && st && S().streaks ? `<div class="det__streak" style="color:var(--c)">${ic('flame', 22)}${st}</div>` : neg && S().negStreaks ? `<div class="det__streak">${ic('minus', 22)}${neg}</div>` : ''}
+        <div class="det__ringrow"><span id="det-streak">${detStreak(h, k)}</span>
           <button class="det__pm minus" data-act="dec" data-id="${h.id}" aria-label="Less">${ic('minus', 26)}</button>
           <div class="det__ring">${ring(200, 10, p)}<i class="knob" style="transform:rotate(${(p * 360).toFixed(1)}deg)"></i><div class="det__val${isTimer || String(val).length > 2 ? ' small' : ''}" id="dv-${h.id}">${val}</div></div>
           <button class="det__pm plus" data-act="${isTimer ? 'timer' : 'inc'}" data-id="${h.id}" aria-label="More">${isTimer ? ic(run ? 'square' : 'play', 24) : ic('plus', 26)}</button></div>
         ${state.notes[k] && state.notes[k][h.id] ? `<p class="note" style="text-align:center">${esc(state.notes[k][h.id])}</p>` : ''}</div>
       <div class="det__foot"><button class="ghost" data-act="skip" data-id="${h.id}" aria-label="Skip">${ic('fast-forward', 26)}</button><button class="ghost" data-act="fail" data-id="${h.id}" aria-label="Fail">${ic('x', 26)}</button><button class="btn" data-act="complete" data-id="${h.id}">${done(h, k) ? 'Undo' : 'Complete'}</button></div>`, h.color);
   }
+  const detStreak = (h, k) => { const st = streak(h, k), neg = negStreak(h); return done(h, k) && st && S().streaks ? `<div class="det__streak" style="color:var(--c)">${ic('flame', 22)}${st}</div>` : neg && S().negStreaks ? `<div class="det__streak">${ic('minus', 22)}${neg}</div>` : ''; };
   const fmtClock = sec => { sec = Math.max(0, Math.round(sec)); const m = Math.floor(sec / 60), s2 = sec % 60; return m + ':' + pad(s2); };
-  function refreshDetail() { if (detailId && sheet.classList.contains('open') && $('#dv-' + detailId)) detailSheet(detailId); }
+  // the open sheet follows the data without being rebuilt, so the ring and
+  // the knob glide to the new value
+  function refreshDetail() {
+    if (!detailId || !sheet.classList.contains('open')) return;
+    const h = state.habits.find(x => x.id === detailId), dv = sheet.querySelector('#dv-' + detailId); if (!h || !dv) return;
+    const k = selected, v = value(h, k), p = done(h, k) ? 1 : ratio(h, k), isTimer = h.type === 'timer', run = running(h);
+    const val = isTimer ? fmtClock(run ? elapsedSec(h) : v * 60) : fmtNum(v);
+    dv.textContent = val; dv.classList.toggle('small', isTimer || String(val).length > 2);
+    const ring = sheet.querySelector('.det__ring .p'); if (ring) { const len = parseFloat(ring.getAttribute('stroke-dasharray')); ring.setAttribute('stroke-dashoffset', (len * (1 - p)).toFixed(2)); }
+    const knob = sheet.querySelector('.det__ring .knob'); if (knob) knob.style.transform = `rotate(${(p * 360).toFixed(1)}deg)`;
+    const st = sheet.querySelector('#det-streak'); if (st) st.innerHTML = detStreak(h, k);
+    const btn = sheet.querySelector('.det__foot .btn'); if (btn) btn.textContent = done(h, k) ? 'Undo' : 'Complete';
+    const plus = sheet.querySelector('.det__pm.plus'); if (plus && isTimer) plus.innerHTML = ic(run ? 'square' : 'play', 24);
+  }
 
   // ---------- menus ----------
   let menuEl = null;
@@ -322,15 +370,35 @@
   function openSheet(html, tint) {
     clearTimeout(closeTimer);
     sheet.innerHTML = html; sheet.classList.toggle('tint', !!tint); sheet.style.setProperty('--c', tint || S().accent);
+    sheet.style.transform = ''; scrim.style.opacity = ''; sheet.scrollTop = 0;
     sheet.classList.remove('closing'); scrim.classList.add('open');
     requestAnimationFrame(() => sheet.classList.add('open'));
   }
   function closeSheet() {
-    detailId = null; scrim.classList.remove('open');
-    sheet.classList.add('closing'); sheet.classList.remove('open');
+    detailId = null; scrim.classList.remove('open'); scrim.style.opacity = '';
+    sheet.classList.add('closing'); sheet.classList.remove('open', 'dragging'); sheet.style.transform = '';
     closeTimer = setTimeout(() => { sheet.innerHTML = ''; sheet.classList.remove('closing'); }, 320);
   }
   scrim.addEventListener('click', closeSheet);
+  // drag the sheet down to dismiss: 1:1 under the finger, friction upwards,
+  // a flick or 120px lets go, otherwise it springs back
+  (function sheetDrag() {
+    let y0 = 0, t0 = 0, dy = 0, on = false;
+    sheet.addEventListener('touchstart', e => { if (on || e.touches.length > 1) return; if (sheet.scrollTop > 0) return; y0 = e.touches[0].clientY; t0 = Date.now(); dy = 0; on = true; }, { passive: true });
+    sheet.addEventListener('touchmove', e => {
+      if (!on) return; dy = e.touches[0].clientY - y0;
+      if (dy < 0) { dy = dy / 4; } else if (sheet.scrollTop > 0) { on = false; sheet.classList.remove('dragging'); sheet.style.transform = ''; return; }
+      if (dy > 0 && e.cancelable) e.preventDefault();
+      sheet.classList.add('dragging'); sheet.style.transform = `translateY(${dy}px)`;
+      scrim.style.opacity = String(Math.max(0, 1 - dy / 500));
+    }, { passive: false });
+    const end = () => {
+      if (!on) return; on = false; sheet.classList.remove('dragging');
+      const v = dy / Math.max(1, Date.now() - t0);
+      if (dy > 120 || v > 0.11) closeSheet(); else { sheet.style.transform = ''; scrim.style.opacity = ''; }
+    };
+    sheet.addEventListener('touchend', end); sheet.addEventListener('touchcancel', end);
+  })();
 
   // ---------- templates ----------
   const T = window.TEMPLATES || {};
@@ -363,7 +431,7 @@
   function fromTemplate(kind, t) {          // t = [name, icon, type, target, unit, group]
     draft = newDraft(kind === 'health' ? 'good' : kind);
     Object.assign(draft, { name: t[0], icon: t[1], emoji: EMOJI[t[1]] || '✅', type: t[2] || 'check', target: t[3] || (t[2] === 'timer' ? 10 : 1), unit: t[2] === 'timer' ? 'Minutes' : (t[4] || 'Count') });
-    closeSheet(); stack = [{ p: 'edit' }]; render();
+    closeSheet(); stack = [{ p: 'edit' }]; render('push');
   }
 
   // ---------- Add / Edit habit (grouped-list pages) ----------
@@ -478,7 +546,7 @@
     const hs = statsSel.length ? all.filter(h => statsSel.includes(h.id)) : all;
     const from = statsRange === 0 ? t : statsRange > 0 ? addDays(t, -(statsRange - 1)) : (all.map(h => h.startsOn || h.createdAt).sort()[0] || t);
     const rangeLabel = { 0: 'Today', 7: 'Last 7 Days', 28: 'Last 28 Days', 90: 'Last 3 Months', 180: 'Last 6 Months', 365: 'Last Year', '-1': 'All Time' }[statsRange];
-    let html = `<div class="page-t glass"><span>Statistics</span></div><button class="range glass" data-act="range-menu">${rangeLabel}</button><div class="stats">`;
+    let html = `<div class="page-t glass"><span>Statistics</span><button class="range r glass" data-act="range-menu">${rangeLabel}</button></div><div class="stats">`;
     html += `<h3>Habits <a data-act="none">Choose Habits</a></h3><div class="hchips">${all.map(h => `<button class="hchip${statsSel.includes(h.id) ? ' on' : ''}" style="--c:${h.color}" data-act="stat-sel" data-id="${h.id}"><span class="card__ico">${emojiOf(h)}</span><span>${esc(h.name)}</span></button>`).join('')}</div>`;
     const tot = totals(hs, from, t), pct = tot.sched ? Math.round(tot.comp / tot.sched * 100) : 0;
     html += `<h3>Completion</h3><div class="sblk"><span class="row__ico">${ic('chart-no-axes-column', 18)}</span><div style="flex:1"><b>${pct}%</b><small>${tot.comp} of ${tot.sched}</small><div class="sbar"><i style="width:${pct}%;background:var(--green)"></i><i style="flex:1;background:var(--orange)"></i></div><div class="legend"><span><i style="background:var(--green)"></i>${tot.comp} completed</span><span><i style="background:var(--orange)"></i>${tot.sched - tot.comp} not completed</span></div></div></div>`;
@@ -605,14 +673,14 @@
   function startTimer(h) {
     if (running(h)) return;
     state.timers[h.id] = { startedAt: Date.now(), base: value(h, today()) * 60, day: today() };
-    save(); render(); ensureTick();
+    save(); afterChange(h); renderNowBar(); ensureTick();
   }
   function stopTimer(h, complete) {
     const t = state.timers[h.id]; if (!t) return;
     const sec = complete ? target(h) * 60 : t.base + (Date.now() - t.startedAt) / 1000;
     delete state.timers[h.id];
     setValue(h, t.day, Math.round(sec / 6) / 10);          // minutes, one decimal
-    render();
+    afterChange(h); renderNowBar();
   }
   let tick = null;
   function ensureTick() { if (!tick) tick = setInterval(tickTimers, 1000); }
@@ -776,6 +844,64 @@
   setInterval(checkReminders, 20000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { checkReminders(); applyPending(); } });
 
+  // ---------- in-place updates (the Today screen animates instead of re-rendering) ----------
+  const onToday = () => cur && cur.classList.contains('today') && cur.isConnected;
+  // one card: classes flip (colour transitions), the action button pops,
+  // the subtitle, badge and today's grid cell follow
+  function patchCard(h) {
+    const el = cur.querySelector('#card-' + h.id); if (!el) return false;
+    const tmp = document.createElement('div'); tmp.innerHTML = habitCard(h); const fresh = tmp.firstElementChild;
+    ['is-done', 'is-run', 'pv-off'].forEach(c => el.classList.toggle(c, fresh.classList.contains(c)));
+    const oldAct = el.querySelector('.card__act'), newAct = fresh.querySelector('.card__act');
+    if (oldAct && newAct && oldAct.innerHTML !== newAct.innerHTML) { oldAct.replaceWith(newAct); newAct.classList.add('pop'); }
+    const sub = el.querySelector('#sub-' + h.id); if (sub) sub.textContent = subtitle(h, selected);
+    const oldB = el.querySelector('.card__badge'), newB = fresh.querySelector('.card__badge');
+    if ((oldB ? oldB.outerHTML : '') !== (newB ? newB.outerHTML : '')) { if (oldB) oldB.remove(); if (newB) el.prepend(newB); }
+    const grid = el.querySelector('.heat__g');
+    if (grid) { const start = addDays(weekStartOf(today()), -39 * 7), idx = Math.round((parse(selected) - parse(start)) / 864e5); const cell = grid.children[idx]; if (cell) cell.className = done(h, selected) ? 'd' : ''; }
+    else { const g = fresh.querySelector('.bars, .line'), o = el.querySelector('.bars, .line'); if (g && o) o.replaceWith(g); }
+    return true;
+  }
+  // the strip: progress circles and the ring on the selected day
+  function patchWeek() {
+    const t = today();
+    cur.querySelectorAll('.day').forEach(d => {
+      const k = d.dataset.k, p = k <= t ? dayProgress(k, live()) : null;
+      d.style.setProperty('--p', (p || 0).toFixed(2)); d.classList.toggle('has-p', !!p);
+      const sel = k === selected; d.classList.toggle('is-sel', sel);
+      const r = d.querySelector('.day__r'); let svg = r.querySelector('svg');
+      if (sel && !svg) { r.insertAdjacentHTML('afterbegin', ring(52, 3.5, 0)); svg = r.querySelector('svg'); requestAnimationFrame(() => { const pp = svg.querySelector('.p'), len = parseFloat(pp.getAttribute('stroke-dasharray')); pp.setAttribute('stroke-dashoffset', (len * (1 - (p || 0))).toFixed(2)); }); }
+      else if (sel && svg) { const pp = svg.querySelector('.p'), len = parseFloat(pp.getAttribute('stroke-dasharray')); pp.setAttribute('stroke-dashoffset', (len * (1 - (p || 0))).toFixed(2)); }
+      else if (!sel && svg) svg.remove();
+    });
+    const title = cur.querySelector('.hdr__t'); if (title && title.textContent !== todayTitle()) { title.classList.add('swap'); setTimeout(() => { title.textContent = todayTitle(); title.classList.remove('swap'); }, 120); }
+  }
+  // the list: cards that changed place glide there (FLIP), new ones fade in
+  function flipList() {
+    const list = cur.querySelector('.list'); const empty = cur.querySelector('.empty');
+    const before = {}; if (list) [...list.querySelectorAll('.card')].forEach(c => { before[c.id] = c.getBoundingClientRect().top; });
+    const tmp = document.createElement('div'); tmp.innerHTML = listHtml(); const fresh = tmp.firstElementChild;
+    if (!fresh) return;
+    if (list) list.replaceWith(fresh); else if (empty) empty.replaceWith(fresh); else cur.appendChild(fresh);
+    if (reduceMotion() || !fresh.classList.contains('list')) return;
+    [...fresh.querySelectorAll('.card')].forEach(c => {
+      const now = c.getBoundingClientRect().top;
+      if (before[c.id] == null) { c.classList.add('appear'); return; }
+      const dy = before[c.id] - now; if (!dy) return;
+      c.style.transform = `translateY(${dy}px)`; c.style.transition = 'none';
+      requestAnimationFrame(() => requestAnimationFrame(() => { c.style.transition = ''; c.classList.add('flip'); c.style.transform = ''; setTimeout(() => c.classList.remove('flip'), 360); }));
+    });
+  }
+  // after a habit changed on the Today screen: patch its card and the strip,
+  // then, once the colour has settled, let the list re-sort
+  let flipTimer = null;
+  function afterChange(h) {
+    if (!onToday()) { render(); return; }
+    const ok = patchCard(h); patchWeek();
+    const order = [...cur.querySelectorAll('.card')].map(c => c.id.slice(5)), want = dayList().map(x => x.id);
+    if (!ok || order.join() !== want.join()) { clearTimeout(flipTimer); flipTimer = setTimeout(flipList, ok ? 320 : 0); }
+  }
+
   // ---------- events ----------
   const canLog = k => k <= today() || S().futureDates;
   function mark(h, k, delta) {
@@ -783,15 +909,15 @@
     if (h.type === 'check') setValue(h, k, delta > 0 ? 1 : 0);
     else setValue(h, k, Math.max(0, Math.round((value(h, k) + delta * (h.step || 1)) * 100) / 100));
     if (done(h, k) && delta > 0) celebrate(h); else tap();
-    render(); refreshDetail();
+    afterChange(h); refreshDetail();
   }
   document.addEventListener('click', e => {
-    const tab = e.target.closest('.tab'); if (tab) { view = tab.dataset.view; stack = []; render(); return; }
+    const tab = e.target.closest('.tab'); if (tab) { if (view === tab.dataset.view && !stack.length) return; view = tab.dataset.view; stack = []; render('fade'); return; }
     const el = e.target.closest('[data-act]'); if (!el) return;
     const act = el.dataset.act, id = el.dataset.id, h = id && state.habits.find(x => x.id === id);
     switch (act) {
       case 'none': break;
-      case 'pop': readDraft(); stack.pop(); if (!stack.length) draft = null; render(); break;
+      case 'pop': readDraft(); stack.pop(); if (!stack.length) draft = null; render('pop'); break;
       case 'go': readDraft(); push({ p: el.dataset.p }); break;
       case 'add': tplKind = 'good'; tplQuery = ''; templatesSheet(); break;
       case 'search': push({ p: 'search' }); break;
@@ -807,11 +933,11 @@
       case 'set-s': { const k = el.dataset.k; let v = el.dataset.v; if (k === 'dayStart' || k === 'weekStart') v = Number(v); S()[k] = v; save(); tap(); render(); break; }
       case 'bg-random': S().bgStart = BG_SWATCHES[Math.floor(Math.random() * BG_SWATCHES.length)]; S().bgEnd = BG_SWATCHES[Math.floor(Math.random() * BG_SWATCHES.length)]; save(); render(); break;
       case 'tpl-kind': tplKind = el.dataset.v; tplQuery = ''; templatesSheet(); break;
-      case 'tpl-custom': closeSheet(); draft = newDraft(el.dataset.kind === 'health' ? 'good' : el.dataset.kind); stack = [{ p: 'edit' }]; render(); setTimeout(() => { const n = $('#f-name'); if (n) n.focus(); }, 450); break;
+      case 'tpl-custom': closeSheet(); draft = newDraft(el.dataset.kind === 'health' ? 'good' : el.dataset.kind); stack = [{ p: 'edit' }]; render('push'); setTimeout(() => { const n = $('#f-name'); if (n) n.focus(); }, 450); break;
       case 'tpl': { const [si, ti] = el.dataset.i.split(':').map(Number); fromTemplate(el.dataset.kind, T[el.dataset.kind].sections[si][1][ti]); break; }
       case 'open': detailSheet(id); break;
       case 'open-day': stack = []; view = 'today'; render(); detailSheet(id); break;
-      case 'edit': closeMenu(); closeSheet(); draft = JSON.parse(JSON.stringify(h)); stack = [{ p: 'edit' }]; render(); break;
+      case 'edit': closeMenu(); closeSheet(); draft = JSON.parse(JSON.stringify(h)); stack = [{ p: 'edit' }]; render('push'); break;
       case 'note': { const cur = (state.notes[selected] || {})[id] || ''; const v = prompt('Note for ' + h.name, cur); if (v != null) { state.notes[selected] = state.notes[selected] || {}; if (v.trim()) state.notes[selected][id] = v.trim(); else delete state.notes[selected][id]; save(); detailSheet(id); } break; }
       case 'more': moreMenu(el, h); e.stopPropagation(); break;
       case 'close': closeSheet(); break;
@@ -828,14 +954,14 @@
       case 'notif-test': if (state.push) syncPush({ test: true }); else notify({ name: 'Tally', id: 'test' }, 'This is what a reminder looks like.'); break;
       case 'push-on': subscribePush().then(render).catch(err => { console.warn(err); alert('Could not turn on reminders. Is Tally on the Home Screen?'); }); break;
       case 'push-off': unsubscribePush(); break;
-      case 'pick': if (/^\d{4}-\d\d-\d\d$/.test(el.dataset.k)) selected = el.dataset.k; render(); break;
+      case 'pick': if (/^\d{4}-\d\d-\d\d$/.test(el.dataset.k) && el.dataset.k !== selected) { selected = el.dataset.k; tap(); if (onToday()) { patchWeek(); flipList(); } else render(); } break;
       case 'inc': mark(h, selected, 1); break;
       case 'dec': mark(h, selected, -1); break;
-      case 'undo': setValue(h, selected, 0); setStatus(h, selected, ''); tap(); render(); refreshDetail(); break;
-      case 'complete': if (done(h, selected)) { setValue(h, selected, 0); render(); refreshDetail(); } else { if (running(h)) stopTimer(h, true); else setValue(h, selected, target(h)); setStatus(h, selected, h.kind === 'bad' ? 'done' : ''); celebrate(h); closeSheet(); render(); } break;
-      case 'skip': setStatus(h, selected, skipped(h, selected) ? '' : 'skip'); tap(); closeSheet(); render(); break;
-      case 'fail': setStatus(h, selected, failed(h, selected) ? '' : 'fail'); tap(); closeSheet(); render(); break;
-      case 'timer': if (running(h)) stopTimer(h); else if (!done(h, today())) { selected = today(); startTimer(h); } refreshDetail(); break;
+      case 'undo': setValue(h, selected, 0); setStatus(h, selected, ''); tap(); afterChange(h); refreshDetail(); break;
+      case 'complete': if (done(h, selected)) { setValue(h, selected, 0); afterChange(h); refreshDetail(); } else { if (running(h)) { delete state.timers[h.id]; setValue(h, selected, target(h)); } else setValue(h, selected, target(h)); setStatus(h, selected, h.kind === 'bad' ? 'done' : ''); celebrate(h); closeSheet(); afterChange(h); } break;
+      case 'skip': setStatus(h, selected, skipped(h, selected) ? '' : 'skip'); tap(); closeSheet(); afterChange(h); break;
+      case 'fail': setStatus(h, selected, failed(h, selected) ? '' : 'fail'); tap(); closeSheet(); afterChange(h); break;
+      case 'timer': if (running(h)) stopTimer(h); else if (!done(h, today())) { if (selected !== today()) { selected = today(); render(); } startTimer(h); } refreshDetail(); break;
       case 'archive': closeMenu(); closeSheet(); h.archived = !h.archived; save(); stack = []; draft = null; render(); break;
       case 'delete': closeMenu(); if (confirm('Delete this habit and all its history?')) { state.habits = state.habits.filter(y => y.id !== id); Object.keys(state.log).forEach(k => { delete state.log[k][id]; }); save(); closeSheet(); stack = []; draft = null; render(); } break;
       case 'go-ach': closeSheet(); view = 'settings'; stack = [{ p: 'achievements' }]; render(); break;
