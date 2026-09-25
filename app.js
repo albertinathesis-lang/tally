@@ -101,9 +101,56 @@
     if (Object.keys(state.timers).length) ensureTick();
     window.scrollTo(0, 0); onScroll();
   }
+  let tabSuppress = 0;
+  const TABS = [['today', 'list-checks', 'Habits'], ['stats', 'chart-no-axes-column', 'Statistics'], ['awards', 'award', 'Awards'], ['settings', 'settings', 'Settings']];
   function renderTabs() {
-    $('#tabbar').innerHTML = [['today', 'list-checks', 'Habits'], ['stats', 'chart-no-axes-column', 'Statistics'], ['awards', 'award', 'Awards'], ['settings', 'settings', 'Settings']]
-      .map(([v, i, l]) => `<button class="tab${v === view ? ' on' : ''}" data-view="${v}">${ic(i, 26)}${l}</button>`).join('');
+    const bar = $('#tabbar');
+    if (!bar.querySelector('.tabbar__glass')) {
+      bar.innerHTML = `<div class="tabbar__glass"></div>` + TABS.map(([v, i, l]) => `<button class="tab" data-view="${v}">${ic(i, 26)}${l}</button>`).join('');
+      dragTabs(bar);
+    }
+    bar.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.view === view));
+    placeGlass(bar, TABS.findIndex(t => t[0] === view));
+  }
+  function placeGlass(bar, i, instant) {
+    const g = bar.querySelector('.tabbar__glass');
+    g.style.transition = instant ? 'none' : '';
+    g.style.transform = `translateX(${i * 100}%)`;
+  }
+  // the glass bubble can be dragged along the bar (1:1 under the finger,
+  // release snaps to the nearest tab, a flick carries it on)
+  function dragTabs(bar) {
+    let drag = null;
+    const slot = () => (bar.clientWidth - 10) / TABS.length;
+    bar.addEventListener('pointerdown', e => {
+      if (!e.isPrimary) return;
+      const i = TABS.findIndex(t => t[0] === view);
+      drag = { x0: e.clientX, i0: i, moved: false, t0: performance.now(), last: [[e.clientX, performance.now()]] };
+      bar.setPointerCapture(e.pointerId);
+    });
+    bar.addEventListener('pointermove', e => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x0;
+      if (!drag.moved && Math.abs(dx) < 8) return;
+      drag.moved = true;
+      drag.last.push([e.clientX, performance.now()]); if (drag.last.length > 6) drag.last.shift();
+      const pos = Math.max(0, Math.min(TABS.length - 1, drag.i0 + dx / slot()));
+      const g = bar.querySelector('.tabbar__glass'); g.style.transition = 'none'; g.style.transform = `translateX(${pos * 100}%)`;
+    });
+    const end = e => {
+      if (!drag) return;
+      const d = drag; drag = null;
+      if (!d.moved) return;                                     // a tap: the click handler switches tabs
+      e.preventDefault();
+      const [x1, t1] = d.last[0], [x2, t2] = d.last[d.last.length - 1];
+      const vel = t2 > t1 ? (x2 - x1) / (t2 - t1) : 0;          // px/ms
+      const carry = Math.max(-0.5, Math.min(0.5, vel * 120 / slot()));   // a flick carries at most half a slot
+      const pos = d.i0 + (e.clientX - d.x0) / slot() + carry;
+      const i = Math.max(0, Math.min(TABS.length - 1, Math.round(pos)));
+      tabSuppress = performance.now() + 350;                     // the click that follows a drag is not a tap
+      view = TABS[i][0]; render();
+    };
+    bar.addEventListener('pointerup', end); bar.addEventListener('pointercancel', end);
   }
   function onScroll() { navc.classList.toggle('show', window.scrollY > 44); }
   window.addEventListener('scroll', onScroll, { passive: true });
@@ -133,14 +180,14 @@
     GROUPS.forEach(g => {
       const hs = dayHabits.filter(h => h.group === g && h.kind !== 'todo');
       if (!hs.length) return;
-      html += `<div class="eyebrow"><span>${g}</span><span>${hs.filter(h => done(h, selected)).length}/${hs.length}</span></div><div class="tiles">`;
-      hs.forEach(h => { html += habitTile(h); });
+      html += `<div class="eyebrow"><span>${g}</span><span>${hs.filter(h => done(h, selected)).length}/${hs.length}</span></div><div class="bars">`;
+      hs.forEach(h => { html += habitBar(h); });
       html += '</div>';
     });
     const todos = dayHabits.filter(h => h.kind === 'todo');
     if (todos.length) {
-      html += `<div class="eyebrow"><span>To-do</span><span>${todos.filter(h => done(h, selected)).length}/${todos.length}</span></div><div class="tiles">`;
-      todos.forEach(h => { html += habitTile(h); });
+      html += `<div class="eyebrow"><span>To-do</span><span>${todos.filter(h => done(h, selected)).length}/${todos.length}</span></div><div class="bars">`;
+      todos.forEach(h => { html += habitBar(h); });
       html += '</div>';
     }
     return html;
@@ -155,6 +202,25 @@
       <circle class="p" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="url(#aring-g)" stroke-width="${w}" stroke-linecap="round" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${(c * (1 - Math.min(1, p))).toFixed(2)}" transform="rotate(-90 ${size / 2} ${size / 2})"/></svg>
       <div class="aring__c"><b>${nDone}<span>/${n}</span></b><small>${p >= 0.999 ? 'all done' : 'done'}</small></div></div>
       <div class="aring__s">${best ? `${best}-day streak` : 'Start a streak'}</div></div>`;
+  }
+  // a habit as a vertical bar: a tall pill that fills from the bottom with
+  // the day's progress, the icon at its foot, the name under it. Tapping the
+  // bar does the habit's main thing: check, +1, or start/stop the timer.
+  function habitBar(h) {
+    const k = selected, v = value(h, k), tg = target(h), isDone = done(h, k), s = streak(h, k);
+    const run = running(h), p = h.type === 'timer' && run ? Math.min(1, elapsedSec(h) / (tg * 60)) : ratio(h, k);
+    let label = '';
+    if (h.type === 'count') label = `${v}<span>/${tg}</span>`;
+    else if (h.type === 'timer') label = `<span id="el-${h.id}">${run ? fmt(elapsedSec(h)) : fmt(v * 60)}</span>`;
+    else label = isDone ? ic('check', 16) : '';
+    const glyph = h.type === 'timer' ? ic(run ? 'pause' : isDone ? 'check' : 'play', 14) : h.type === 'count' ? ic('plus', 14) : '';
+    const act = h.type === 'check' ? 'toggle' : h.type === 'count' ? 'inc' : 'timer';
+    return `<div class="vbar${isDone ? ' is-done' : ''}${run ? ' is-running' : ''}${h.color ? ' is-tinted' : ''}"${h.color ? ` style="--hc:${h.color}"` : ''}>
+      <div class="vbar__val">${label}</div>
+      <button class="vbar__pill" data-act="${act}" data-id="${h.id}" aria-label="${esc(h.name)}"><i class="vbar__fill" id="bar-${h.id}" style="--p:${Math.round(p * 100)}"></i>${glyph ? `<span class="vbar__glyph">${glyph}</span>` : ''}<span class="vbar__icon">${ic(h.icon, 20)}</span></button>
+      <button class="vbar__name" data-act="edit" data-id="${h.id}">${esc(h.name)}</button>
+      <div class="vbar__meta">${h.type === 'count' && v > 0 ? `<button class="vbar__minus" data-act="dec" data-id="${h.id}" aria-label="Less">${ic('minus', 12)}</button>` : ''}${s ? `<span class="streak">${ic('flame', 11)}${s}</span>` : ''}</div>
+    </div>`;
   }
   // a habit as a tall tile: icon and control on top, name and progress below
   function habitTile(h) {
@@ -363,7 +429,7 @@
       const h = state.habits.find(x => x.id === id); if (!h) { delete state.timers[id]; save(); return; }
       const sec = elapsedSec(h), tg = target(h) * 60;
       if (sec >= tg) { stopTimer(h, true); celebrate(h); return; }
-      const el = document.getElementById('el-' + id); if (el) el.textContent = fmt(sec) + ' of ' + target(h) + ' min';
+      const el = document.getElementById('el-' + id); if (el) el.textContent = el.closest('.vbar') ? fmt(sec) : fmt(sec) + ' of ' + target(h) + ' min';
       const bar = document.getElementById('bar-' + id); if (bar) bar.style.setProperty('--p', Math.round(sec / tg * 100));
       const nb = document.getElementById('nb-' + id); if (nb) nb.textContent = fmt(sec);
       const ring = document.querySelector('#chk-' + id + ' .p'); if (ring) { const len = parseFloat(ring.getAttribute('stroke-dasharray')); ring.setAttribute('stroke-dashoffset', (len * (1 - sec / tg)).toFixed(2)); }
@@ -525,7 +591,7 @@
 
   // ---------- events ----------
   document.addEventListener('click', e => {
-    const tab = e.target.closest('.tab'); if (tab) { view = tab.dataset.view; render(); return; }
+    const tab = e.target.closest('.tab'); if (tab) { if (performance.now() < tabSuppress) return; view = tab.dataset.view; render(); return; }
     const el = e.target.closest('[data-act],[data-set],[data-day]'); if (!el) return;
     const act = el.dataset.act, id = el.dataset.id, h = id && state.habits.find(x => x.id === id);
     if (el.dataset.set) { readDraft(); draft[el.dataset.set] = el.dataset.v; if (el.dataset.set === 'type') draft.target = draft.type === 'timer' ? 10 : 1; if (el.dataset.set === 'kind') { if (!draft.name && draft._new) draft.color = (T[draft.kind] || {}).color || ''; if (draft.kind === 'todo') { draft.days = [1, 1, 1, 1, 1, 1, 1]; draft.group = 'Anytime'; } } renderEditSheet(false); return; }

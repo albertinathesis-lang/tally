@@ -98,12 +98,21 @@ input, select { font: inherit; color: inherit; }
 .empty { text-align: center; color: var(--text-2); padding: 56px 24px; font-size: 15px; line-height: 1.6; }
 .empty b { display: block; color: var(--text); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 4px; }
 
-/* ---- tab bar: a floating pill, the active tab in its own pill ---- */
+/* ---- tab bar: a floating pill; a glass bubble sits on the selected tab
+   and slides (or is dragged) between them ---- */
 .tabbar { position: fixed; left: 16px; right: 16px; bottom: calc(var(--sab) + 12px); z-index: 40; height: 66px; padding: 5px;
-  display: flex; justify-content: space-between; align-items: stretch; border-radius: var(--r-pill); border: 1px solid var(--hairline); box-shadow: var(--sh-panel); }
-.tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: var(--r-pill); font-size: 10.5px; font-weight: 500; color: var(--text-2); transition: background .2s var(--ease-out-quart); }
-.tab.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 600; }
+  display: flex; justify-content: space-between; align-items: stretch; border-radius: var(--r-pill); border: 1px solid var(--hairline); box-shadow: var(--sh-panel);
+  touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+.tabbar__glass { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px) / 4); border-radius: var(--r-pill); pointer-events: none;
+  background: rgba(255,255,255,.62); border: 1px solid rgba(255,255,255,.75); box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 22px rgba(0,0,0,.10), inset 0 1px 0 rgba(255,255,255,.8);
+  backdrop-filter: blur(14px) saturate(180%); -webkit-backdrop-filter: blur(14px) saturate(180%);
+  transition: transform .45s var(--ease-spring); will-change: transform; }
+@media (prefers-color-scheme: dark) { .tabbar__glass { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.18); box-shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 22px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18); } }
+.tab { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: var(--r-pill); font-size: 10.5px; font-weight: 500; color: var(--text-2); transition: color .25s; }
+.tab:active { transform: none; }
+.tab.on { color: var(--accent); font-weight: 600; }
 .tab.on .ic { fill: color-mix(in srgb, var(--accent) 18%, transparent); }
+@media (prefers-reduced-motion: reduce) { .tabbar__glass { transition: none; } }
 .app { padding-bottom: calc(66px + var(--sab) + 36px); }
 
 /* ---- sheet: rises from the edge, same path back ---- */
@@ -272,3 +281,26 @@ input, select { font: inherit; color: inherit; }
 .stepper--s button { width: 34px; height: 36px; }
 .tile.is-done .row__bar i, .tile.is-done .chk i { background: var(--accent); }
 .tile.is-tinted.is-done .row__bar i { background: var(--hc); }
+
+/* ---- vertical bars ---- */
+.bars { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+.bars::-webkit-scrollbar { display: none; }
+.vbar { --hc: var(--accent); flex: 0 0 76px; display: flex; flex-direction: column; align-items: center; scroll-snap-align: start; }
+.vbar__val { height: 22px; font-size: 14px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); display: flex; align-items: center; gap: 1px; }
+.vbar__val span { color: var(--text-3); font-weight: 500; font-size: 12px; }
+.vbar__pill { position: relative; width: 62px; height: 176px; border-radius: 31px; background: var(--surface); box-shadow: var(--sh-card); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 9px; }
+.vbar__pill:active { transform: scale(.97); }
+.vbar__fill { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--p) * 1%); background: color-mix(in srgb, var(--hc) 22%, transparent); border-radius: 31px; transition: height .5s var(--ease-out-quart); }
+.vbar.is-done .vbar__fill { background: var(--hc); }
+.vbar.is-running .vbar__fill { transition: height 1s linear; }
+.vbar__icon { position: relative; width: 44px; height: 44px; border-radius: 50%; background: var(--circle); color: var(--text-2); display: grid; place-items: center; }
+.vbar.is-tinted .vbar__icon { background: color-mix(in srgb, var(--hc) 18%, transparent); color: var(--hc); }
+.vbar.is-done .vbar__icon { background: #fff; color: var(--hc); }
+.vbar__glyph { position: relative; width: 26px; height: 26px; border-radius: 50%; margin-bottom: 8px; display: grid; place-items: center; color: var(--hc); background: color-mix(in srgb, var(--hc) 14%, transparent); }
+.vbar.is-done .vbar__glyph { color: #fff; background: rgba(255,255,255,.28); }
+.vbar__name { margin-top: 8px; font-size: 12.5px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; text-align: center; max-width: 76px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.vbar.is-done .vbar__name { color: var(--text-3); }
+.vbar__meta { height: 18px; margin-top: 3px; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-3); }
+.vbar__meta .streak { display: inline-flex; align-items: center; gap: 1px; }
+.vbar__minus { width: 22px; height: 22px; border-radius: 50%; background: var(--circle); color: var(--text-2); display: grid; place-items: center; }
+@media (prefers-color-scheme: dark) { .vbar.is-done .vbar__icon { background: rgba(255,255,255,.92); } }
