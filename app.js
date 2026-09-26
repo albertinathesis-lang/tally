@@ -27,7 +27,12 @@
   const COLORS = ['#ff3b30', '#ec9142', '#ffcc00', '#5dc461', '#59c2b1', '#4fb8c7', '#32ade6', '#3478f6', '#5e5ce6', '#af52de', '#ff2d55', '#a2845e', '#8e8e93'];
   const ACCENTS = ['#ef4a5e', '#ff9500', '#ffcc00', '#34c759', '#59c2b1', '#32ade6', '#3478f6', '#5e5ce6', '#af52de', '#ff2d55'];
   const BG_SWATCHES = ['#a2cbf8', '#f8b4c8', '#f6c8a2', '#c9f0c9', '#f9e9a2', '#c8c2f9', '#f9c2e8', '#a2e8f0', '#d6d6dc', '#f0a2a2', '#b8f0d2', '#f2d2b0', '#a8bdf0', '#e9f0a2', '#efcdae'];
-  const SETTINGS = { appearance: 'auto', accent: '#ef4a5e', customBg: true, bgStart: '#a2cbf8', bgEnd: '#efcdae', sort: 'completedLast', progressView: 'grid', hideDone: false, hideFailed: false, hideSkipped: false, confetti: true, streaks: true, negStreaks: true, dayStart: 4, weekStart: 0, sounds: true, completionSound: 'default', badges: true, futureDates: false };
+  // Grit's background presets: a start/end pair each (the swatch shows the start)
+  const BG_PRESETS = [['#3478f6', '#ff9500'], ['#af52de', '#ff2d55'], ['#ff3b30', '#ffcc00'], ['#ff9500', '#34c759'], ['#3478f6', '#5e5ce6'], ['#5e5ce6', '#af52de'], ['#af52de', '#32ade6'], ['#ff2d55', '#ff9500'], ['#32ade6', '#34c759'], ['#34c759', '#ffcc00'], ['#5e5ce6', '#32ade6'], ['#ff9500', '#af52de'], ['#59c2b1', '#3478f6'], ['#ff2d55', '#5e5ce6'], ['#32ade6', '#ff2d55']];
+  const COMPLETION_SOUNDS = ['default', 'completion1', 'completion2', 'completion3', 'completion4', 'completion5', 'completion6', 'completion7'];
+  const NOTIF_SOUNDS = ['default', ...Array.from({ length: 14 }, (_, i) => 'notification' + (i + 1))];
+  const soundLabel = v => v === 'default' ? 'Default' : v.replace(/^completion/, 'Completion ').replace(/^notification/, 'Notification ');
+  const SETTINGS = { appearance: 'auto', accent: '#ef4a5e', customBg: true, bgStart: '#a2cbf8', bgEnd: '#efcdae', sort: 'completedLast', progressView: 'grid', hideDone: false, hideFailed: false, hideSkipped: false, confetti: true, streaks: true, negStreaks: true, dayStart: 4, weekStart: 0, sounds: true, completionSound: 'default', notificationSound: 'default', badges: true, futureDates: false, dayStartMin: 0, noteAfterSkip: true, reschedule: true, collapseGroups: false, appIcon: 'mustard', name: '', bgPreset: 0 };
   const nearest = hex => { const v = x => [1, 3, 5].map(i => parseInt(x.slice(i, i + 2), 16)); if (!/^#[0-9a-f]{6}$/i.test(hex)) return COLORS[3]; const a = v(hex); return COLORS.reduce((b, c) => { const q = v(c), d = (a[0] - q[0]) ** 2 + (a[1] - q[1]) ** 2 + (a[2] - q[2]) ** 2; return d < b[0] ? [d, c] : b; }, [Infinity, COLORS[3]])[1]; };
   let state = load();
   function load() {
@@ -157,38 +162,81 @@
   // is a .layer that scrolls on its own; the old layer leaves once the
   // transition ends.
   function render(nav) {
-    applyTheme(); closeMenu();
+    applyTheme(); closeMenu(); closePop();
     const top = stack[stack.length - 1], isToday = !top && view === 'today';
+    const rm = reduceMotion(), prev = cur;
+    // pop with the page underneath still in the DOM: refresh it in place and slide the top one off
+    if (nav === 'pop' && prev && prev.isConnected && prev.previousElementSibling && prev.previousElementSibling.classList.contains('under')) {
+      const under = prev.previousElementSibling;
+      under.innerHTML = top ? renderPage(top) : VIEWS[view]();
+      under.className = 'layer under' + (isToday ? ' today' : '');
+      cur = under; under.style.pointerEvents = ''; prev.classList.add('out'); prev.style.pointerEvents = 'none';
+      if (rm) { under.classList.remove('under'); prev.remove(); }
+      else { requestAnimationFrame(() => requestAnimationFrame(() => { under.classList.remove('under'); prev.classList.add('from-right'); })); setTimeout(() => prev.remove(), 420); }
+      afterRender(under, top, isToday, nav); return;
+    }
     const layer = document.createElement('div'); layer.className = 'layer' + (isToday ? ' today' : '');
-    const prev = cur;
     cur = layer;
     layer.innerHTML = top ? renderPage(top) : VIEWS[view]();
-    const rm = reduceMotion();
     if (prev && prev.isConnected && nav && !rm) {
-      prev.classList.add('out'); prev.style.pointerEvents = 'none';
+      prev.style.pointerEvents = 'none';
       if (nav === 'push') {
         layer.classList.add('from-right'); app.appendChild(layer);
-        requestAnimationFrame(() => requestAnimationFrame(() => { layer.classList.remove('from-right'); prev.classList.add('to-left'); }));
-        setTimeout(() => prev.remove(), 420);
+        requestAnimationFrame(() => requestAnimationFrame(() => { layer.classList.remove('from-right'); prev.classList.add('under'); }));
       } else if (nav === 'pop') {
-        layer.classList.add('to-left'); app.insertBefore(layer, prev); prev.classList.add('top');
-        requestAnimationFrame(() => requestAnimationFrame(() => { layer.classList.remove('to-left'); prev.classList.add('from-right'); }));
+        prev.classList.add('out'); layer.classList.add('under'); app.insertBefore(layer, prev);
+        requestAnimationFrame(() => requestAnimationFrame(() => { layer.classList.remove('under'); prev.classList.add('from-right'); }));
         setTimeout(() => prev.remove(), 420);
       } else {
         layer.classList.add('fade-in'); app.appendChild(layer);
-        requestAnimationFrame(() => requestAnimationFrame(() => { layer.classList.remove('fade-in'); prev.classList.add('fade-out'); }));
-        setTimeout(() => prev.remove(), 200);
+        const olds = [...app.querySelectorAll('.layer')].filter(l => l !== layer);
+        requestAnimationFrame(() => requestAnimationFrame(() => { layer.classList.remove('fade-in'); olds.forEach(l => l.classList.add('fade-out')); }));
+        setTimeout(() => olds.forEach(l => l.remove()), 200);
       }
-    } else { app.innerHTML = ''; app.appendChild(layer); if (prev && prev.isConnected) prev.remove(); }
+    } else { app.innerHTML = ''; app.appendChild(layer); }
+    afterRender(layer, top, isToday, nav, prev);
+  }
+  function afterRender(layer, top, isToday, nav, prev) {
     if (isToday && (!prev || !prev.classList.contains('today') || nav)) { const l = layer.querySelector('.list'); if (l) { l.classList.add('enter'); [...l.children].forEach((c, i) => c.style.setProperty('--i', Math.min(i, 8))); } }
     $('#tabbar').hidden = !!top; $('#navc').hidden = true;
     renderTabs(); renderNowBar();
     if (Object.keys(state.timers).length) ensureTick();
     if (isToday) setupWeekSwipe(layer);
     if (top && top.p === 'reorder') setupReorder();
+    if (top && top.p === 'set-pv') pvPreviewInit(layer);
     miniBarOnScroll(layer);
     $('#tabbar').classList.remove('mini');
+    layer.addEventListener('scroll', closePop, { passive: true });
   }
+  // interactive swipe-back: a drag from the left edge moves the page with the finger
+  (function swipeBack() {
+    let d = null;
+    app.addEventListener('touchstart', e => {
+      if (!stack.length || e.touches.length > 1 || d) return;
+      const t = e.touches[0]; if (t.clientX > 30) return;
+      const top = cur, under = top && top.previousElementSibling;
+      if (!under || !under.classList.contains('under')) return;
+      d = { x0: t.clientX, t0: Date.now(), top, under, dx: 0, active: false };
+    }, { passive: true });
+    app.addEventListener('touchmove', e => {
+      if (!d) return; const dx = e.touches[0].clientX - d.x0;
+      if (!d.active) { if (dx < 6) return; d.active = true; d.top.style.transition = 'none'; d.under.style.transition = 'none'; }
+      d.dx = Math.max(0, dx); const W = app.clientWidth;
+      d.top.style.transform = `translateX(${d.dx}px)`; d.under.style.transform = `translateX(${(-28 + 28 * d.dx / W).toFixed(2)}%)`;
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+    const end = () => {
+      if (!d) return; const c = d; d = null; if (!c.active) return;
+      const W = app.clientWidth, v = c.dx / Math.max(1, Date.now() - c.t0);
+      c.top.style.transition = ''; c.under.style.transition = '';
+      if (c.dx > W * 0.35 || v > 0.5) {
+        c.top.style.transform = 'translateX(100%)'; c.under.style.transform = 'translateX(0)';
+        readDraft(); stack.pop(); if (!stack.length) draft = null; render('pop');
+        setTimeout(() => { c.under.style.transform = ''; }, 450);
+      } else { c.top.style.transform = ''; c.under.style.transform = ''; }
+    };
+    app.addEventListener('touchend', end); app.addEventListener('touchcancel', end);
+  })();
   // iOS 26: while scrolling down the tab bar folds into a small round button
   // with the active tab's icon; scrolling up (or tapping it) brings it back
   function miniBarOnScroll(layer) {
@@ -319,7 +367,8 @@
     if (pv === 'grid') chart = heat(h);
     else if (pv === 'bars') chart = bars(h);
     else if (pv === 'line') chart = lineChart(h);
-    return `<section class="card${isDone ? ' is-done' : ''}${run ? ' is-run' : ''}${pv === 'off' ? ' pv-off' : ''}" style="--c:${h.color}" id="card-${h.id}">${badge}
+    const pp = h.type === 'check' || isDone ? 0 : (h.type === 'timer' && run ? Math.min(1, elapsedSec(h) / (target(h) * 60)) : ratio(h, k));
+    return `<section class="card${isDone ? ' is-done' : ''}${run ? ' is-run' : ''}${pv === 'off' ? ' pv-off' : ''}${pp > 0 ? ' is-partial' : ''}${pp >= .4 ? ' on-fill' : ''}" style="--c:${h.color}" id="card-${h.id}">${pp > 0 ? `<i class="card__fill" style="transform:scaleX(${pp.toFixed(3)})"></i>` : ''}${badge}
       <div class="card__head"><button class="card__body" data-act="open" data-id="${h.id}" style="display:flex;align-items:center;gap:12px;flex:1;min-width:0"><span class="card__ico">${emojiOf(h)}</span><span class="card__txt"><div class="card__name">${esc(h.name)}</div><div class="card__sub" id="sub-${h.id}">${subtitle(h, k)}</div></span></button>${act}</div>
       ${chart ? `<button class="card__body" data-act="open" data-id="${h.id}">${chart}</button>` : ''}</section>`;
   }
@@ -404,16 +453,50 @@
 
   // ---------- menus ----------
   let menuEl = null;
-  function openMenu(html, anchor) {
+  function openMenu(html, anchor, opts = {}) {
     closeMenu();
-    const r = anchor.getBoundingClientRect();
-    menuEl = document.createElement('div'); menuEl.className = 'menu glass'; menuEl.innerHTML = html;
-    menuEl.style.top = (r.bottom + 6) + 'px'; menuEl.style.left = Math.max(10, Math.min(r.left, window.innerWidth - 270)) + 'px';
+    const r = anchor.getBoundingClientRect(), w = opts.width || 250;
+    menuEl = document.createElement('div'); menuEl.className = 'menu glass' + (opts.cls ? ' ' + opts.cls : ''); menuEl.innerHTML = html; menuEl.style.width = w + 'px';
+    const right = opts.align === 'right' || r.left + w > window.innerWidth - 10;
+    menuEl.style.top = Math.min(r.bottom + 4, window.innerHeight - 60) + 'px';
+    menuEl.style.left = (right ? Math.max(10, r.right - w) : Math.max(10, r.left)) + 'px';
+    menuEl.style.transformOrigin = right ? 'top right' : 'top left';
     document.body.appendChild(menuEl);
+    const mh = menuEl.getBoundingClientRect().height;
+    if (r.bottom + 4 + mh > window.innerHeight - 20) { menuEl.style.top = Math.max(60, r.top - 4 - mh) + 'px'; menuEl.style.transformOrigin = right ? 'bottom right' : 'bottom left'; }
+    const on = menuEl.querySelector('.on'); if (on && menuEl.scrollHeight > menuEl.clientHeight) on.scrollIntoView({ block: 'center' });
     setTimeout(() => document.addEventListener('click', onMenuOutside, { once: true }), 0);
   }
   function onMenuOutside(e) { if (menuEl && !menuEl.contains(e.target)) closeMenu(); }
   function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; } }
+  // a value picker: a checklist that pops from the row's value (Grit's inline menus)
+  const pickItem = (k, v, label, on, icon) => `<button class="mi${on ? ' on' : ''}" data-act="set-s" data-k="${k}" data-v="${v}"><span class="chk">${on ? ic('check', 18) : ''}</span>${icon ? ic(icon, 20) : ''}<span class="mt">${label}</span></button>`;
+  function pickMenu(anchor, k, items, width) { openMenu(items.map(([v, l, i]) => pickItem(k, v, l, String(S()[k]) === String(v), i)).join(''), anchor, { align: 'right', width: width || 220, cls: 'pick' }); }
+  // the Day Starts At wheel: hours, minutes and AM/PM in three snapping columns
+  let popEl = null;
+  function closePop() { if (popEl) { popEl.remove(); popEl = null; } }
+  function timeWheelPop(anchor) {
+    closeMenu(); closePop();
+    const s = S(), h24 = s.dayStart || 0, h12 = ((h24 + 11) % 12) + 1, pm = h24 >= 12, m = s.dayStartMin || 0;
+    const col = (id, vals, cur, w) => `<div class="wcol" id="${id}" style="width:${w}px"><i></i><i></i>${vals.map(v => `<b class="${String(v) === String(cur) ? 'on' : ''}" data-v="${v}">${v}</b>`).join('')}<i></i><i></i></div>`;
+    const r = anchor.getBoundingClientRect();
+    popEl = document.createElement('div'); popEl.className = 'pop glass'; popEl.style.transformOrigin = 'top right';
+    popEl.innerHTML = `<div class="wheels"><i class="wsel"></i>${col('w-h', Array.from({ length: 12 }, (_, i) => i + 1), h12, 56)}${col('w-m', Array.from({ length: 60 }, (_, i) => pad(i)), pad(m), 64)}${col('w-ap', ['AM', 'PM'], pm ? 'PM' : 'AM', 64)}</div>`;
+    popEl.style.top = (r.bottom + 4) + 'px'; popEl.style.left = Math.max(10, r.right - 214) + 'px';
+    document.body.appendChild(popEl);
+    const apply = () => { const H = Number(popEl.querySelector('#w-h').dataset.v || h12), M = Number(popEl.querySelector('#w-m').dataset.v || m), AP = popEl.querySelector('#w-ap').dataset.v || (pm ? 'PM' : 'AM'); S().dayStart = (H % 12) + (AP === 'PM' ? 12 : 0); S().dayStartMin = M; save(); const v = cur.querySelector('#daystart'); if (v) v.textContent = dayStartLabel(); };
+    popEl.querySelectorAll('.wcol').forEach(c => vwheel(c, apply));
+    setTimeout(() => document.addEventListener('click', function f(e) { if (popEl && !popEl.contains(e.target)) closePop(); else if (popEl) document.addEventListener('click', f, { once: true }); }, { once: true }), 0);
+  }
+  const dayStartLabel = () => { const h = S().dayStart || 0, m = S().dayStartMin || 0; return `${((h + 11) % 12) + 1}:${pad(m)} ${h >= 12 ? 'PM' : 'AM'}`; };
+  // vertical snapping wheel column: the row under the selection band is the pick
+  function vwheel(el, onPick) {
+    const opts = [...el.querySelectorAll('b')], RH = 32;
+    let cur = opts.findIndex(o => o.classList.contains('on')); if (cur < 0) cur = 0;
+    el.dataset.v = opts[cur].dataset.v; el.scrollTop = cur * RH;
+    let raf = null, quiet = true; setTimeout(() => { quiet = false; ensureAudio(); }, 250);
+    el.addEventListener('scroll', () => { if (raf) return; raf = requestAnimationFrame(() => { raf = null; const i = Math.max(0, Math.min(opts.length - 1, Math.round(el.scrollTop / RH))); if (i !== cur) { cur = i; opts.forEach((o, j) => o.classList.toggle('on', j === i)); el.dataset.v = opts[i].dataset.v; if (!quiet) { clickSound(); onPick(); } } }); }, { passive: true });
+  }
   const SORTS = [['default', 'Default', 'Sort habits in your custom order.'], ['progress', 'By Progress', 'Sort habits by current progress.'], ['completedLast', 'Completed Last', 'Keep unfinished habits above completed ones.']];
   const PVS = [['default', 'Default', 'layout-list'], ['off', 'Off', ''], ['grid', 'Grid', 'grid-3x3'], ['bars', 'Bars', 'chart-no-axes-column'], ['line', 'Line', 'chart-line']];
   function listMenu(anchor) {
@@ -559,26 +642,52 @@
       case 'edit-group': return pageT('Groups', undefined, `<button class="r circ" data-act="group-new" aria-label="New group">${ic('plus', 24)}</button>`) + `<div class="pg">${state.groups.length ? `<div class="grp"><button class="opt" data-act="set-d" data-k="group" data-v=""><span>No group</span>${!d.group ? `<span class="chk">${ic('check', 20)}</span>` : ''}</button>${state.groups.map(g => `<button class="opt" data-act="set-d" data-k="group" data-v="${esc(g.name)}"><span>${esc(g.name)}</span>${d.group === g.name ? `<span class="chk">${ic('check', 20)}</span>` : ''}</button>`).join('')}</div>` : emptyState('No Groups Yet', 'Create a group to organize related habits.', `<button class="pillbtn" data-act="group-new">${ic('plus', 18)}Create New Group</button>`)}</div>`;
       case 'edit-none': return pageT('Coming later') + `<div class="pg"><p class="note" style="text-align:center;padding-top:40px">Not part of this version.</p></div>`;
       case 'reorder': return pageT('Reorder Habits', `<button class="l circ" data-act="pop" aria-label="Close">${ic('x', 24)}</button>`, `<button class="r circ" style="background:var(--accent);color:#fff" data-act="pop" aria-label="Done">${ic('check', 24)}</button>`) + `<div class="ro"><div class="grp" id="ro-list"><div class="row" style="background:var(--card-2);min-height:40px;font-weight:600;color:var(--ink-3)">Ungrouped</div>${live().map(h => `<div class="row" data-id="${h.id}"><span class="minus">${ic('minus', 14)}</span><span class="card__ico" style="width:26px;height:26px;font-size:20px">${emojiOf(h)}</span><span class="row__t" style="color:${h.color};font-weight:600">${esc(h.name)}<small>${subtitle(h, selected)}</small></span><span class="handle" style="color:var(--ink-4)">${ic('align-justify', 20)}</span></div>`).join('')}</div></div>`;
-      case 'set-appearance': return pageT('Appearance') + `<div class="pg"><div class="grp">${[['auto', 'Automatic'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<button class="opt" data-act="set-s" data-k="appearance" data-v="${v}"><span>${l}</span>${s.appearance === v ? `<span class="chk">${ic('check', 20)}</span>` : ''}</button>`).join('')}</div></div>`;
-      case 'set-theme': return pageT('Theme') + `<div class="pg"><div class="grp"><div class="row"><span class="row__ico" style="background:#af52de">${ic('palette', 16)}</span><span class="row__t">Color</span><span class="row__v"><span class="dot" style="background:${s.accent}"></span></span></div><div class="swatches" style="padding-top:0">${ACCENTS.map(c => `<button style="--v:${c};width:30px;border-radius:50%" class="${s.accent === c ? 'on' : ''}" data-act="set-s" data-k="accent" data-v="${c}" aria-label="${c}"></button>`).join('')}</div>
-        <div class="row"><span class="row__ico" style="background:#ff9500">${ic('smartphone', 16)}</span><span class="row__t">Custom Background</span><label class="switch"><input type="checkbox" data-set-s="customBg" ${s.customBg ? 'checked' : ''}><i></i></label></div></div>
-        ${s.customBg ? `<h3 style="display:flex;justify-content:space-between">Custom Background<button data-act="bg-random" style="color:var(--accent);font-size:13px">Randomize</button></h3><div class="grp"><div class="swatches">${BG_SWATCHES.map(c => `<button style="--v:${c}" data-act="set-s" data-k="bgStart" data-v="${c}" aria-label="${c}"></button>`).join('')}</div>
-        <div class="row"><span class="row__ico" style="background:#32ade6">${ic('arrow-up-to-line', 16)}</span><span class="row__t">Start Color</span><input type="color" data-set-s="bgStart" value="${s.bgStart}" style="width:34px;height:34px;border:0;background:none"></div>
-        <div class="row"><span class="row__ico" style="background:#ff9500">${ic('arrow-down-to-line', 16)}</span><span class="row__t">End Color</span><input type="color" data-set-s="bgEnd" value="${s.bgEnd}" style="width:34px;height:34px;border:0;background:none"></div></div><div class="phone"></div>` : ''}</div>`;
-      case 'set-sort': return pageT('Sort Habits') + `<div class="pg" style="display:flex;flex-direction:column;gap:12px">${SORTS.map(([v, l, desc]) => `<div><div class="grp"><button class="opt" data-act="set-s" data-k="sort" data-v="${v}">${ic('list', 20)}<span>${l}</span>${s.sort === v ? `<span class="chk">${ic('check', 20)}</span>` : ''}</button></div><p class="note">${desc}</p></div>`).join('')}
-        ${[['hideDone', 'Hide Completed', 'circle-check', 'Hide completed habits from the day list.'], ['hideFailed', 'Hide Failed', 'circle-x', 'Hide failed habits from the day list.'], ['hideSkipped', 'Hide Skipped', 'circle-play', 'Hide skipped habits from the day list.']].map(([k, l, i, desc]) => `<div><div class="grp"><div class="opt">${ic(i, 20)}<span>${l}</span><label class="switch" style="margin-left:auto"><input type="checkbox" data-set-s="${k}" ${s[k] ? 'checked' : ''}><i></i></label></div></div><p class="note">${desc}</p></div>`).join('')}</div>`;
-      case 'set-pv': return pageT('Progress View') + `<div class="pg"><div class="grp">${PVS.filter(x => x[0] !== 'default').map(([v, l, i]) => `<button class="opt" data-act="set-s" data-k="progressView" data-v="${v}">${i ? ic(i, 20) : '<span style="width:20px"></span>'}<span>${l}</span>${s.progressView === v ? `<span class="chk">${ic('check', 20)}</span>` : ''}</button>`).join('')}</div><p class="note" style="color:var(--orange)">Using this feature for every habit can affect performance. If the app slows down, turn it off here and use it only for specific habits.</p><div class="preview">${pvPreview({ name: 'Drink Water', emoji: '💧', color: COLORS[7], type: 'count', target: 2, unit: 'litres', pv: 'default' })}</div></div>`;
-      case 'set-more': return pageT('Appearance') + `<div class="pg"><div class="grp">${[['confetti', 'Confetti Animation', 'party-popper', '#af52de'], ['streaks', 'Streaks', 'flame', '#ff9500'], ['negStreaks', 'Negative Streaks', 'x', '#ff3b30'], ['badges', 'Show Recap Popups', 'trophy', '#ffcc00']].map(([k, l, i, c]) => `<div class="row"><span class="row__ico" style="background:${c}">${ic(i, 16)}</span><span class="row__t">${l}</span><label class="switch"><input type="checkbox" data-set-s="${k}" ${s[k] ? 'checked' : ''}><i></i></label></div>`).join('')}</div></div>`;
-      case 'set-sounds': return pageT('Sounds') + `<div class="pg"><div class="grp"><div class="row"><span class="row__ico" style="background:#32ade6">${ic('volume-2', 16)}</span><span class="row__t">Sounds</span><label class="switch"><input type="checkbox" data-set-s="sounds" ${s.sounds ? 'checked' : ''}><i></i></label></div><div class="row"><span class="row__ico" style="background:#34c759">${ic('circle-check', 16)}</span><span class="row__t">Completion Sound</span><select class="field num" data-set-s="completionSound" style="width:auto">${['default', 'chime', 'pop', 'bell'].map(v => `<option value="${v}" ${s.completionSound === v ? 'selected' : ''}>${v[0].toUpperCase() + v.slice(1)}</option>`).join('')}</select></div></div></div>`;
-      case 'groups': return pageT('Groups', undefined, `<button class="r circ" data-act="group-new" aria-label="New group">${ic('plus', 24)}</button>`) + `<div class="pg">${state.groups.length ? `<div class="grp">${state.groups.map(g => `<div class="row"><span class="card__ico" style="width:26px;height:26px;font-size:20px"><span class="emoji">${g.emoji || '📁'}</span></span><span class="row__t">${esc(g.name)}<small>${live().filter(h => h.group === g.name).length} habits</small></span>${minusBtn(`data-act="group-del" data-name="${esc(g.name)}"`)}</div>`).join('')}</div>` : emptyState('No Groups Yet', 'Create a group to organize related habits.', `<button class="pillbtn" data-act="group-new">${ic('plus', 18)}Create New Group</button>`)}</div>`;
-      case 'vacations': return pageT('Vacations', undefined, `<button class="r circ" data-act="vac-new" aria-label="New vacation">${ic('plus', 24)}</button>`) + `<div class="pg">${state.vacations.length ? `<div class="grp">${state.vacations.map((v, i) => `<div class="row"><span class="row__ico" style="background:#34c759">${ic('palmtree', 16)}</span><span class="row__t">${fmtDate(v.from)} – ${fmtDate(v.to)}</span>${minusBtn(`data-act="vac-del" data-i="${i}"`)}</div>`).join('')}</div>` : emptyState('No Vacations Yet', 'Plan a vacation to pause habits for selected dates.', `<button class="pillbtn" data-act="vac-new">${ic('plus', 18)}Create New Vacation</button>`)}</div>`;
+      case 'set-theme': { const preset = BG_PRESETS.findIndex(p => p[0] === s.bgStart && p[1] === s.bgEnd); return pageT('Theme') + `<div class="pg"><div class="grp">
+        <div class="row">${G('palette', '#af52de')}<span class="row__t">Color</span>${vmenu('accent', `<span class="dot" style="background:${s.accent}"></span>`)}</div>
+        ${trow(G('smartphone', '#ff9500'), 'Custom Background', 'customBg')}</div>
+        ${s.customBg ? `<h3 class="h3row">Custom Background<button data-act="bg-random" class="link">Randomize</button></h3><div class="grp">
+        <div class="row swrow">${BG_PRESETS.map((p, i) => `<button class="sw${i === preset ? ' on' : ''}" style="background:${p[0]}" data-act="bg-preset" data-i="${i}" aria-label="Preset ${i + 1}">${i === preset ? ic('check', 11) : ''}</button>`).join('')}</div>
+        <div class="row">${G('smartphone', '#32ade6')}<span class="row__t">Start Color</span>${vmenu('bgStart', `<span class="dot" style="background:${s.bgStart}"></span>`)}</div>
+        <div class="row">${G('smartphone', '#ff9500')}<span class="row__t">End Color</span>${vmenu('bgEnd', `<span class="dot" style="background:${s.bgEnd}"></span>`)}</div>
+        <div class="phone" id="phone-preview"></div></div>` : ''}</div>`; }
+      case 'set-icon': return pageT('Icon') + `<div class="pg"><div class="iconrow">${[['mustard', 'Mustard'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<button class="appicon ${v}${s.appIcon === v ? ' on' : ''}" data-act="set-s" data-k="appIcon" data-v="${v}" aria-label="${l}"><span class="micon ${v}"></span>${s.appIcon === v ? `<i class="chkb">${ic('check', 10)}</i>` : ''}</button>`).join('')}</div></div>`;
+      case 'set-sort': return pageT('Sort Habits') + `<div class="pg sortpg">${SORTS.map(([v, l, desc]) => `<div class="grp"><button class="row" data-act="set-s" data-k="sort" data-v="${v}">${G('list-ordered', 'var(--accent)')}<span class="row__t">${l}</span>${s.sort === v ? `<span class="chk">${ic('check', 20)}</span>` : ''}</button></div><p class="note">${desc}</p>`).join('')}
+        ${[['hideDone', 'Hide Completed', 'circle-check', 'Hide completed habits from the day list.'], ['hideFailed', 'Hide Failed', 'circle-x', 'Hide failed habits from the day list.'], ['hideSkipped', 'Hide Skipped', 'circle-play', 'Hide skipped habits from the day list.'], ['collapseGroups', 'Collapse completed groups', 'fold-vertical', 'Automatically collapse a group when all its habits are completed.']].map(([k, l, i, desc]) => `<div class="grp">${trow(G(i, '#8e8e93'), l, k)}</div><p class="note">${desc}</p>`).join('')}</div>`;
+      case 'set-pv': return pageT('Progress View') + `<div class="pg"><div class="grp">${PVS.filter(x => x[0] !== 'default').map(([v, l, i]) => `<button class="row" data-act="set-pv" data-v="${v}">${i ? G(i, 'var(--accent)') : '<span class="gly"></span>'}<span class="row__t">${l}</span>${s.progressView === v ? `<span class="chk">${ic('check', 20)}</span>` : ''}</button>`).join('')}</div><p class="note" style="color:var(--orange)">Using this feature for every habit can affect performance. If the app slows down, turn it off here and use it only for specific habits.</p><div class="pvwrap" id="pvwrap">${pvPreview({ name: 'Drink Water', emoji: '💧', color: '#3478f6', type: 'count', target: 2, unit: 'litres', pv: 'default', _demo: 1.25 })}</div></div>`;
+      case 'set-more': return pageT('Appearance') + `<div class="pg"><div class="grp">${[['confetti', 'Confetti Animation', 'party-popper', '#32ade6'], ['noteAfterSkip', 'Show Note After Skip', 'circle-help', '#ff9500'], ['reschedule', 'Rescheduling Suggestions', 'refresh-ccw', '#5e5ce6'], ['badges', 'Show Recap Popups', 'trophy', '#ffcc00'], ['streaks', 'Streaks', 'flame', '#ff9500'], ['negStreaks', 'Negative Streaks', 'x', '#ff3b30']].map(([k, l, i, c]) => trow(G(i, c), l, k)).join('')}
+        <button class="row" data-act="set-name">${G('user', '#34c759')}<span class="row__t">Name</span><span class="row__v">${esc(s.name || '')}</span>${ic('chevron-right', 15, 'chev')}</button></div></div>`;
+      case 'export': return pageT('Export for Analysis') + `<div class="pg"><div class="grp">
+        <button class="row" data-act="none">${G('list-checks', '#5e5ce6')}<span class="row__t">Habits</span><span class="row__v">All Habits</span>${ic('chevron-right', 15, 'chev')}</button>
+        <div class="row">${G('calendar', '#ff9500')}<span class="row__t">Start</span><input type="date" class="chipv" id="x-from" value="${live().map(h => h.startsOn || h.createdAt).sort()[0] || today()}"></div>
+        <div class="row">${G('flag', '#007aff')}<span class="row__t">End</span><input type="date" class="chipv" id="x-to" value="${today()}"></div>
+        <div class="grp__btn"><button class="btn accent" data-act="export-go">Export</button></div></div>
+        <p class="note">Exports are JSON files for analysis in AI or LLM tools. They are not backups and cannot restore your Tally data.</p>
+        <div class="grp" style="margin-top:22px"><button class="row" data-act="import">${G('download', '#34c759')}<span class="row__t">Import a backup</span>${ic('chevron-right', 15, 'chev')}</button></div></div>`;
+      case 'groups': return pageT('Groups', undefined, `<button class="r circ glass" data-act="group-new" aria-label="New group">${ic('plus', 22)}</button>`) + `<div class="pg">${state.groups.length ? `<div class="grp">${state.groups.map(g => `<div class="row"><span class="card__ico" style="width:26px;height:26px;font-size:20px"><span class="emoji">${g.emoji || '📁'}</span></span><span class="row__t">${esc(g.name)}<small>${live().filter(h => h.group === g.name).length} habits</small></span>${minusBtn(`data-act="group-del" data-name="${esc(g.name)}"`)}</div>`).join('')}</div>` : emptyState('No Groups Yet', 'Create a group to organize related habits.', `<button class="pillbtn" data-act="group-new">${ic('plus', 18)}Create New Group</button>`)}</div>`;
+      case 'vacations': return pageT('Vacations', undefined, `<button class="r circ glass" data-act="vac-new" aria-label="New vacation">${ic('plus', 22)}</button>`) + `<div class="pg">${state.vacations.length ? `<div class="grp">${state.vacations.map((v, i) => `<div class="row">${G('palmtree', '#34c759')}<span class="row__t">${fmtDate(v.from)} – ${fmtDate(v.to)}</span>${minusBtn(`data-act="vac-del" data-i="${i}"`)}</div>`).join('')}</div>` : emptyState('No Vacations Yet', 'Plan a vacation to pause habits for selected dates.', `<button class="pillbtn" data-act="vac-new">${ic('plus', 18)}Create New Vacation</button>`)}</div>`;
       case 'achievements': return pageT('Achievements') + renderAchievements();
-      case 'archived': { const a = state.habits.filter(x => x.archived); return pageT('Archived Habits') + `<div class="pg">${a.length ? `<div class="grp">${a.map(x => `<button class="row" data-act="edit" data-id="${x.id}"><span class="card__ico" style="width:26px;height:26px;font-size:20px">${emojiOf(x)}</span><span class="row__t">${esc(x.name)}<small>${completions(x)} completions</small></span>${ic('chevron-right', 18, 'chev')}</button>`).join('')}</div>` : emptyState('No Archived Habits Yet', '')}</div>`; }
+      case 'archived': { const a = state.habits.filter(x => x.archived); return pageT('Archived Habits') + `<div class="pg">${a.length ? `<div class="grp">${a.map(x => `<button class="row" data-act="edit" data-id="${x.id}"><span class="card__ico" style="width:26px;height:26px;font-size:20px">${emojiOf(x)}</span><span class="row__t">${esc(x.name)}<small>${completions(x)} completions</small></span>${ic('chevron-right', 15, 'chev')}</button>`).join('')}</div>` : emptyState('No Archived Habits Yet', '')}</div>`; }
       case 'search': return pageT('Search', `<button class="l circ" data-act="pop" aria-label="Close">${ic('x', 24)}</button>`) + `<div class="pg"><div class="search" style="position:static;margin:0;padding:0;background:none"><div>${ic('search', 18)}<input type="search" id="hsearch" placeholder="Search habits" autocomplete="off" enterkeyhint="search"></div></div><div class="grp" id="hsearch-out" style="margin-top:14px">${live().map(h => `<button class="row" data-act="open-day" data-id="${h.id}"><span class="card__ico" style="width:26px;height:26px;font-size:20px">${emojiOf(h)}</span><span class="row__t">${esc(h.name)}</span>${ic('chevron-right', 18, 'chev')}</button>`).join('')}</div></div>`;
     }
     return pageT('');
   }
-  const pvPreview = d => { const h = Object.assign({ id: 'demo', kind: 'good', days: [1, 1, 1, 1, 1, 1, 1] }, d); const pv = pvOf(h); return `<section class="card${pv === 'off' ? ' pv-off' : ''}" style="--c:${h.color}"><div class="card__head"><span class="card__ico">${emojiOf(h)}</span><span class="card__txt"><div class="card__name">${esc(h.name || 'Habit name')}</div><div class="card__sub">Every day${h.type !== 'check' ? `, ${h.target} ${unitLabel(h)}` : ''}</div></span><span class="card__act">${ic('plus', 26)}</span></div>${pv === 'grid' ? heat(h) : pv === 'bars' ? bars(h) : pv === 'line' ? lineChart(h) : ''}</section>`; };
+  const pvPreview = d => { const h = Object.assign({ id: 'demo', kind: 'good', days: [1, 1, 1, 1, 1, 1, 1] }, d); const pv = pvOf(h), p = d._demo ? Math.min(1, d._demo / d.target) : 0; return `<section class="card${pv === 'off' ? ' pv-off' : ''}${p > 0 && p < 1 ? ' is-partial' : ''}${p >= .4 ? ' on-fill' : ''}" style="--c:${h.color}">${p > 0 && p < 1 ? `<i class="card__fill" style="transform:scaleX(${p.toFixed(3)})"></i>` : ''}<div class="card__head"><span class="card__ico">${emojiOf(h)}</span><span class="card__txt"><div class="card__name">${esc(h.name || 'Habit name')}</div><div class="card__sub">Every day${h.type !== 'check' ? `, ${d._demo ? fmtNum(d._demo) + '/' : ''}${h.target} ${unitLabel(h)}` : ''}</div></span><span class="card__act">${ic('plus', 26)}</span></div>${pv === 'grid' ? heat(h) : pv === 'bars' ? bars(h) : pv === 'line' ? lineChart(h) : ''}</section>`; };
+  // the Progress View page: the preview card grows or shrinks to its new
+  // content and the chart draws in, instead of the page re-rendering
+  function pvPreviewInit(layer) { const w = layer.querySelector('#pvwrap'); if (w) w.dataset.h = w.firstElementChild.getBoundingClientRect().height; }
+  function pvSwap(v) {
+    S().progressView = v; save(); tap();
+    const w = cur.querySelector('#pvwrap'); if (!w) { render(); return; }
+    cur.querySelectorAll('[data-act="set-pv"]').forEach(b => { const on = b.dataset.v === v; let c = b.querySelector('.chk'); if (on && !c) b.insertAdjacentHTML('beforeend', `<span class="chk">${ic('check', 20)}</span>`); else if (!on && c) c.remove(); });
+    const old = w.firstElementChild, h0 = old.getBoundingClientRect().height;
+    w.innerHTML = pvPreview({ name: 'Drink Water', emoji: '💧', color: '#3478f6', type: 'count', target: 2, unit: 'litres', pv: 'default', _demo: 1.25 });
+    const card = w.firstElementChild, h1 = card.getBoundingClientRect().height;
+    if (reduceMotion()) return;
+    card.style.height = h0 + 'px'; card.style.overflow = 'hidden'; card.classList.add('grow');
+    const chart = card.querySelector('.heat__g, .bars, .line'); if (chart) { chart.classList.add('reveal'); if (chart.classList.contains('heat__g')) [...chart.children].forEach((c, i) => c.style.setProperty('--c', Math.floor(i / 7))); }
+    requestAnimationFrame(() => requestAnimationFrame(() => { card.style.height = h1 + 'px'; }));
+    setTimeout(() => { card.style.height = ''; card.style.overflow = ''; card.classList.remove('grow'); }, 420);
+  }
   function readDraft() {
     const d = draft; if (!d) return;
     const g = (id, f) => { const el = $(id); if (el) f(el); };
@@ -674,52 +783,68 @@
   }
 
   // ---------- Settings ----------
+  // a settings row: coloured glyph, label, value on the right
+  const G = (icon, color, extra = '') => `<span class="gly" style="color:${color}">${ic(icon, 21, extra)}</span>`;
+  const srow = (act, glyph, label, val, extra = '', chev = true) => `<button class="row" data-act="${act}" ${extra}>${glyph}<span class="row__t">${label}</span><span class="row__v">${val || ''}</span>${chev ? ic('chevron-right', 15, 'chev') : ''}</button>`;
+  const vmenu = (k, label, icon) => `<button class="row__v vbtn" data-act="menu-${k}">${icon ? ic(icon, 16) : ''}<span>${label}</span>${ic('chevrons-up-down', 14)}</button>`;
+  const trow = (glyph, label, k, sub) => `<div class="row">${glyph}<span class="row__t">${label}${sub ? `<span class="warn">${sub}</span>` : ''}</span><label class="switch"><input type="checkbox" data-set-s="${k}" ${S()[k] ? 'checked' : ''}><i></i></label></div>`;
   function renderSettings() {
     const s = S(), n = live().length, a = state.habits.length - n;
-    const R = (p, ico, bg, label, val) => row('go', ic(ico, 16), bg, label, val, `data-p="${p}"`);
+    const go = (p, glyph, label, val) => srow('go', glyph, label, val, `data-p="${p}"`);
+    const appr = { auto: ['Automatic', 'contrast'], light: ['Light', 'sun'], dark: ['Dark', 'moon'] }[s.appearance];
     return `<div class="page-t glass"><span>Settings</span></div><div class="pg">
       <h3>Appearance</h3><div class="grp">
-        ${R('set-appearance', 'contrast', '#007aff', 'Appearance', { auto: 'Automatic', light: 'Light', dark: 'Dark' }[s.appearance])}
-        ${R('set-theme', 'smartphone', '#af52de', 'Theme', `<span class="dot" style="background:${s.accent}"></span>`)}
-        ${R('set-sort', 'list', '#34c759', 'Sort', SORTS.find(x => x[0] === s.sort)[1])}
-        ${R('set-pv', 'layout-list', '#007aff', 'Progress View', PVS.find(x => x[0] === s.progressView)[1])}
-        ${R('set-more', 'ellipsis', '#8e8e93', 'More', '')}</div>
+        <div class="row">${G('contrast', '#007aff')}<span class="row__t">Appearance</span>${vmenu('appearance', appr[0], appr[1])}</div>
+        ${go('set-theme', G('smartphone', '#af52de'), 'Theme', `<span class="tswatch" style="background:linear-gradient(180deg, ${s.bgStart}, ${s.bgEnd})"></span><span class="dot" style="background:${s.accent}"></span>`)}
+        ${go('set-icon', '<span class="gly sq">?</span>', 'Icon', `<span class="micon ${s.appIcon}"></span>`)}
+        ${go('set-sort', G('list-ordered', '#34c759'), 'Sort', `${ic('align-justify', 16)} ${SORTS.find(x => x[0] === s.sort)[1]}`)}
+        ${go('set-pv', G('layout-list', '#007aff'), 'Progress View', PVS.find(x => x[0] === s.progressView)[1])}
+        ${go('set-more', G('ellipsis', '#8e8e93'), 'More', '')}</div>
       <h3>General</h3><div class="grp">
-        <div class="row"><span class="row__ico" style="background:#ffcc00">${ic('badge', 16)}</span><span class="row__t">Badges${notifState() !== 'granted' ? '<span class="warn">Enable notifications to use this feature.</span>' : ''}</span><label class="switch"><input type="checkbox" data-set-s="badges" ${s.badges ? 'checked' : ''}><i></i></label></div>
-        <div class="row"><span class="row__ico" style="background:#007aff">${ic('clock', 16)}</span><span class="row__t">Day Starts At</span><select class="field num" data-set-s="dayStart" style="width:auto">${[0, 1, 2, 3, 4, 5, 6].map(h => `<option value="${h}" ${s.dayStart === h ? 'selected' : ''}>${h === 0 ? '12:00 AM' : h + ':00 AM'}</option>`).join('')}</select></div>
-        <div class="row"><span class="row__ico" style="background:#34c759">${ic('globe', 16)}</span><span class="row__t">Language</span><span class="row__v">English ${ic('arrow-up-right', 14)}</span></div>
-        <div class="row"><span class="row__ico" style="background:#5e5ce6">${ic('calendar', 16)}</span><span class="row__t">Week Starts On</span><select class="field num" data-set-s="weekStart" style="width:auto"><option value="0" ${s.weekStart === 0 ? 'selected' : ''}>Monday</option><option value="1" ${s.weekStart === 1 ? 'selected' : ''}>Sunday</option></select></div>
-        ${R('edit-none', 'calendar-plus', '#ff9500', 'Calendar Integration', 'None')}
-        ${R('edit-none', 'hand', '#ff3b30', 'Block selected apps', 'Off')}
-        <div class="row"><span class="row__ico" style="background:#34c759">${ic('calendar-check', 16)}</span><span class="row__t">Allow Future Dates</span><label class="switch"><input type="checkbox" data-set-s="futureDates" ${s.futureDates ? 'checked' : ''}><i></i></label></div></div>
+        ${trow(G('badge', '#ffcc00', 'fill-ico'), 'Badges', 'badges', notifState() !== 'granted' ? '<b>Enable notifications</b> to use this feature.' : '')}
+        ${notifRow()}
+        <div class="row">${G('clock', '#007aff')}<span class="row__t">Day Starts At</span><button class="chipv" data-act="daystart" id="daystart">${dayStartLabel()}</button></div>
+        <div class="row">${G('globe', '#34c759')}<span class="row__t">Language</span><span class="row__v">English ${ic('arrow-up-right', 13)}</span></div>
+        <div class="row">${G('calendar', '#5e5ce6')}<span class="row__t">Week Starts On</span>${vmenu('weekStart', s.weekStart === 1 ? 'Sunday' : 'Monday')}</div>
+        ${go('edit-none', G('calendar-plus', '#ff9500'), 'Calendar Integration', ic('calendar-check', 18))}
+        ${go('edit-none', G('hand', '#ff3b30'), 'Block selected apps', 'On (0)')}
+        ${trow(G('calendar-check', '#34c759'), 'Allow Future Dates', 'futureDates')}</div>
       <p class="note">Allow habit logging on future dates.</p>
-      <h3>Notifications</h3><div class="grp">${notifRow()}${notifState() === 'granted' ? `<button class="row" data-act="notif-test"><span class="row__ico" style="background:#32ade6">${ic('bell', 16)}</span><span class="row__t">Send a test reminder</span></button>` : ''}</div><p class="note">${notifNote()}</p>
-      <h3>Sounds</h3><div class="grp">${R('set-sounds', 'volume-2', '#32ade6', 'Sounds', s.sounds ? 'On' : 'Off')}</div>
+      <h3>Sounds</h3><div class="grp">
+        ${trow(G('volume-2', '#32ade6'), 'Sounds', 'sounds')}
+        <div class="row">${G('circle-check', '#34c759')}<span class="row__t">Completion Sound</span>${vmenu('completionSound', soundLabel(s.completionSound))}</div>
+        <div class="row">${G('bell', '#ff9500')}<span class="row__t">Notification Sound</span>${vmenu('notificationSound', soundLabel(s.notificationSound))}</div></div>
       <h3>Data</h3><div class="grp">
-        ${R('groups', 'folder', '#5e5ce6', 'Groups', state.groups.length || '')}
-        ${R('vacations', 'palmtree', '#34c759', 'Vacations', state.vacations.length || '')}
-        ${R('achievements', 'trophy', '#ffcc00', 'Achievements', '')}
-        ${R('archived', 'archive', '#af52de', 'Archived Habits', a || '')}</div>
+        ${go('groups', G('folder', '#5e5ce6'), 'Groups', '')}
+        ${go('vacations', G('palmtree', '#34c759'), 'Vacations', '')}
+        ${go('achievements', G('trophy', '#ffcc00'), 'Achievements', '')}
+        ${go('archived', G('archive', '#af52de'), 'Archived Habits', '')}</div>
       <h3>Sync & Export</h3><div class="grp">
-        <button class="row" data-act="export"><span class="row__ico" style="background:#34c759">${ic('clipboard-list', 16)}</span><span class="row__t">Export for Analysis</span>${ic('chevron-right', 18, 'chev')}</button>
-        <button class="row" data-act="import"><span class="row__ico" style="background:#007aff">${ic('download', 16)}</span><span class="row__t">Import</span>${ic('chevron-right', 18, 'chev')}</button>
-        <button class="row" data-act="fresh" style="color:var(--orange)"><span class="row__ico" style="background:#ff9500">${ic('refresh-ccw', 16)}</span><span class="row__t">Fresh Start</span></button>
-        <button class="row danger" data-act="wipe"><span class="row__ico" style="background:#ff3b30">${ic('trash-2', 16)}</span><span class="row__t">Delete All Data</span></button></div>
-      <h3>Help & Support</h3><div class="grp">
-        <a class="row" href="mailto:hello@aiartlab.org?subject=Tally" style="text-decoration:none"><span class="row__ico" style="background:#007aff">${ic('circle-help', 16)}</span><span class="row__t">Get Support</span>${ic('chevron-right', 18, 'chev')}</a>
-        <button class="row" data-act="share-app" style="color:var(--green)"><span class="row__ico" style="background:#34c759">${ic('share', 16)}</span><span class="row__t">Share App</span></button></div>
-      <p class="note">Current version: 0.9 · ${n} habit${n === 1 ? '' : 's'}, stored on this device only.</p><div style="height:40px"></div></div>`;
+        <div class="row">${G('cloud', '#007aff')}<span class="row__t">iCloud Sync<span class="warn">Not available in this version. Your data stays on this device; use Export to keep a copy.</span></span><label class="switch"><input type="checkbox" disabled><i></i></label></div>
+        ${go('export', G('clipboard-list', '#32ade6'), 'Export for Analysis', '')}
+        ${srow('fresh', G('refresh-ccw', '#ff9500'), '<span style="color:var(--orange)">Fresh Start</span>', '', '', false)}
+        ${srow('wipe', G('trash-2', '#ff3b30'), '<span style="color:var(--red)">Delete All Data</span>', '', '', false)}</div>
+      <h3>${ic('crown', 16, 'crown')}Help & Support</h3><div class="grp">
+        ${srow('none', G('star', '#ffcc00', 'fill-ico'), 'Review on the App Store', ic('arrow-up-right', 13), '', false)}
+        <a class="row" href="mailto:hello@aiartlab.org?subject=Tally" style="text-decoration:none">${G('circle-help', '#007aff')}<span class="row__t">Get Support</span>${ic('chevron-right', 15, 'chev')}</a>
+        ${srow('none', G('gift', '#ff2d55'), '<span style="color:var(--red)">Redeem Offer Code</span>', '', '', false)}
+        ${srow('share-app', G('share', '#34c759'), '<span style="color:var(--green)">Share App</span>', '', '', false)}
+        ${go('edit-none', G('mic', '#5e5ce6'), 'Shortcuts', '')}</div>
+      <p class="foot">Current version: 0.9 (1)<br>User ID: ${uidOf()} <button class="copy" data-act="copy-id" aria-label="Copy">${ic('copy', 13)}</button></p><div style="height:40px"></div></div>`;
   }
+  const uidOf = () => { if (!state.uid) { state.uid = '_' + Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join(''); save(); } return state.uid; };
+  const HEX = '<svg viewBox="0 0 106 100" aria-hidden="true"><path d="M46 4.2a14 14 0 0 1 14 0l34.4 19.9a14 14 0 0 1 7 12.1v27.6a14 14 0 0 1-7 12.1L60 95.8a14 14 0 0 1-14 0L11.6 75.9a14 14 0 0 1-7-12.1V36.2a14 14 0 0 1 7-12.1z"/></svg>';
   function renderAchievements() {
     const all = live(), best = all.length ? Math.max(...all.map(bestStreak)) : 0;
     const totalPct = all.length ? Math.round(all.reduce((a, h) => a + completions(h), 0) / Math.max(1, all.length) * 100) : 0;
     const minutes = all.filter(h => h.type === 'timer').reduce((a, h) => a + Object.keys(state.log).reduce((b, k) => b + value(h, k), 0), 0);
     const has = k => all.some(h => h.kind === k);
-    return `<div class="ach"><h4>Longest Streak</h4>${STREAKS.map(n => `<div><span class="hex${best >= n ? ' on' : ''}" style="--v:#ff9500">${ic('flame', 34)}</span>${n} days</div>`).join('')}
-      <h4>Goals</h4>${GOALS.map(n => `<div><span class="hex${totalPct >= n ? ' on' : ''}" style="--v:#32ade6">${ic('flag', 34)}</span>${n}%</div>`).join('')}${MINUTES.map(n => `<div><span class="hex${minutes >= n ? ' on' : ''}" style="--v:#ffcc00">${ic('timer', 34)}</span>${n} minutes</div>`).join('')}
-      <h4>Habits</h4>${[['good', 'Good habit', 'thumbs-up', '#34c759'], ['bad', 'Bad habit', 'hand', '#8e8e93'], ['track', 'Track habit', 'chart-line', '#8e8e93'], ['todo', 'To-do habit', 'list', '#8e8e93'], ['health', 'Health habit', 'heart', '#8e8e93']].map(([k, l, i, c]) => `<div><span class="hex${has(k) ? ' on' : ''}" style="--v:${c}">${ic(i, 34)}</span>${l}</div>`).join('')}</div>`;
+    const badge = (on, color, icon, label) => `<div class="ach__b"><span class="hex${on ? ' on' : ''}" style="--v:${color}">${HEX}${ic(icon, 44, 'fill-ico')}</span><small>${label}</small></div>`;
+    return `<div class="ach"><h4>Longest Streak</h4><div class="ach__g">${STREAKS.map(n => badge(best >= n, '#ff9500', 'flame', n + ' days')).join('')}</div>
+      <h4>Goals</h4><div class="ach__g">${GOALS.map(n => badge(totalPct >= n, '#32ade6', 'flag', n + '%')).join('')}${MINUTES.map(n => badge(minutes >= n, '#ffcc00', 'timer', n + ' minutes')).join('')}</div>
+      <h4>Habits</h4><div class="ach__g">${[['good', 'Good habit', 'thumbs-up', '#34c759'], ['bad', 'Bad habit', 'hand', '#8e8e93'], ['track', 'Track habit', 'chart-line', '#8e8e93'], ['todo', 'To-do habit', 'list', '#8e8e93'], ['health', 'Health habit', 'heart', '#8e8e93']].map(([k, l, i, c]) => badge(has(k), c, i, l)).join('')}</div>
+      <button class="link right" data-act="reset-ach">Reset earned achievements</button><div style="height:30px"></div></div>`;
   }
-
   // ---------- reorder (drag rows) ----------
   function setupReorder() {
     const list = $('#ro-list'); if (!list) return;
@@ -761,6 +886,7 @@
       const sub = document.getElementById('sub-' + id); if (sub) sub.textContent = subtitle(h, selected);
       const nb = document.getElementById('nb-' + id); if (nb) nb.textContent = fmtClock(sec);
       const dv = document.getElementById('dv-' + id); if (dv) dv.textContent = fmtClock(sec);
+      const fl = document.querySelector('#card-' + id + ' .card__fill'); if (fl) fl.style.transform = `scaleX(${Math.min(1, sec / tg).toFixed(3)})`;
       const rg = document.querySelector('#card-' + id + ' .ring .p'); if (rg) { const len = parseFloat(rg.getAttribute('stroke-dasharray')); rg.setAttribute('stroke-dashoffset', (len * (1 - sec / tg)).toFixed(2)); }
     });
   }
@@ -797,6 +923,7 @@
     } catch (e) {}
   }
   const tap = () => { if (NATIVE && NATIVE.tap) NATIVE.tap(); };
+  function clickSound() { if (NATIVE && NATIVE.tick) NATIVE.tick(); if (!S().sounds) return; try { ensureAudio(); if (!actx) return; tone(1800, 900, 0, .03, .1, 'square'); } catch (e) {} }
 
   // ---------- push (reminders while the app is closed) ----------
   const PUSH = { url: 'https://lodogasuaggsibycwqyi.supabase.co', key: 'sb_publishable_PyPIDVs6quS3Qlv-hXqrHQ_hx53bZgN', vapid: 'BFThnWY2_-TOy3R00UIPO2Tk9X6GhmWp-G05YSaEjktanUIpA0KHWWapbf-Kva0xvDNmlo1oF0pMgxBvpIO1IL8' };
@@ -869,13 +996,13 @@
   function notifRow() {
     const st = notifState();
     const label = { granted: 'Allowed', denied: 'Blocked in Settings', default: 'Off', unsupported: 'Not available here' }[st];
-    const ico = `<span class="row__ico" style="background:#ff9500">${ic('bell', 16)}</span>`;
+    const ico = G('bell', '#ff9500');
     if (st === 'default') return `<button class="row" data-act="notif">${ico}<span class="row__t">Notifications</span><span class="row__v" style="color:var(--accent)">Allow</span></button>`;
     let rows = `<div class="row">${ico}<span class="row__t">Notifications</span><span class="row__v">${label}</span></div>`;
     if (NATIVE && st === 'granted') return rows;
     if (st === 'granted' && pushReady()) rows += state.push
-      ? `<button class="row" data-act="push-off"><span class="row__ico" style="background:#34c759">${ic('cloud', 16)}</span><span class="row__t">While Tally is closed</span><span class="row__v">On</span></button>`
-      : `<button class="row" data-act="push-on"><span class="row__ico" style="background:#34c759">${ic('cloud', 16)}</span><span class="row__t">While Tally is closed</span><span class="row__v" style="color:var(--accent)">Turn on</span></button>`;
+      ? `<button class="row" data-act="push-off">${G('cloud', '#34c759')}<span class="row__t">While Tally is closed</span><span class="row__v">On</span></button>`
+      : `<button class="row" data-act="push-on">${G('cloud', '#34c759')}<span class="row__t">While Tally is closed</span><span class="row__v" style="color:var(--accent)">Turn on</span></button>`;
     return rows;
   }
   function notifNote() {
@@ -918,7 +1045,9 @@
   function patchCard(h) {
     const el = cur.querySelector('#card-' + h.id); if (!el) return false;
     const tmp = document.createElement('div'); tmp.innerHTML = habitCard(h); const fresh = tmp.firstElementChild;
-    ['is-done', 'is-run', 'pv-off'].forEach(c => el.classList.toggle(c, fresh.classList.contains(c)));
+    ['is-done', 'is-run', 'pv-off', 'is-partial', 'on-fill'].forEach(c => el.classList.toggle(c, fresh.classList.contains(c)));
+    const of = el.querySelector('.card__fill'), nf = fresh.querySelector('.card__fill');
+    if (of && nf) of.style.transform = nf.style.transform; else if (nf && !of) { nf.style.transform = 'scaleX(0)'; el.prepend(nf); requestAnimationFrame(() => requestAnimationFrame(() => { nf.style.transform = fresh.querySelector('.card__fill').style.transform; })); } else if (of && !nf) of.remove();
     const oldAct = el.querySelector('.card__act'), newAct = fresh.querySelector('.card__act');
     if (oldAct && newAct && oldAct.innerHTML !== newAct.innerHTML) { oldAct.replaceWith(newAct); newAct.classList.add('pop'); }
     const sub = el.querySelector('#sub-' + h.id); if (sub) sub.textContent = subtitle(h, selected);
@@ -1032,11 +1161,24 @@
       case 'menu-pv': pvMenu(el); e.stopPropagation(); break;
       case 'range-menu': openMenu([[0, 'Today'], [7, 'Last 7 Days'], [28, 'Last 28 Days'], [90, 'Last 3 Months'], [180, 'Last 6 Months'], [365, 'Last Year'], [-1, 'All Time']].map(([v, l]) => `<button data-act="set-range" data-v="${v}"><span class="chk">${statsRange === v ? ic('check', 18) : ''}</span><span class="mt">${l}</span></button>`).join(''), el); e.stopPropagation(); break;
       case 'set-range': statsRange = Number(el.dataset.v); render(); break;
+      case 'set-pv': pvSwap(el.dataset.v); break;
+      case 'daystart': timeWheelPop(el); e.stopPropagation(); break;
+      case 'menu-appearance': pickMenu(el, 'appearance', [['auto', 'Automatic', 'contrast'], ['dark', 'Dark', 'moon'], ['light', 'Light', 'sun']], 200); e.stopPropagation(); break;
+      case 'menu-weekStart': pickMenu(el, 'weekStart', [[0, 'Monday'], [1, 'Sunday']], 180); e.stopPropagation(); break;
+      case 'menu-completionSound': pickMenu(el, 'completionSound', COMPLETION_SOUNDS.map(v => [v, soundLabel(v)]), 200); e.stopPropagation(); break;
+      case 'menu-notificationSound': pickMenu(el, 'notificationSound', NOTIF_SOUNDS.map(v => [v, soundLabel(v)]), 200); e.stopPropagation(); break;
+      case 'menu-accent': openMenu(`<div class="dots">${ACCENTS.map(c => `<button class="dotb${S().accent === c ? ' on' : ''}" style="--v:${c}" data-act="set-s" data-k="accent" data-v="${c}" aria-label="${c}"></button>`).join('')}</div>`, el, { align: 'right', width: 236 }); e.stopPropagation(); break;
+      case 'menu-bgStart': case 'menu-bgEnd': { const k = act.slice(5); openMenu(`<div class="dots">${BG_SWATCHES.concat(ACCENTS).map(c => `<button class="dotb${S()[k] === c ? ' on' : ''}" style="--v:${c}" data-act="set-s" data-k="${k}" data-v="${c}" aria-label="${c}"></button>`).join('')}</div>`, el, { align: 'right', width: 236 }); e.stopPropagation(); break; }
+      case 'bg-preset': { const p = BG_PRESETS[Number(el.dataset.i)]; S().bgStart = p[0]; S().bgEnd = p[1]; save(); tap(); render(); break; }
+      case 'set-name': { const v = prompt('Your name (shown when sharing)', S().name || ''); if (v != null) { S().name = v.trim().slice(0, 40); save(); render(); } break; }
+      case 'copy-id': try { navigator.clipboard.writeText(uidOf()); tap(); } catch (x) {} break;
+      case 'reset-ach': if (confirm('Reset earned achievements?')) { state.achReset = today(); save(); render(); } break;
+      case 'export-go': { const from = ($('#x-from') || {}).value || '0000', to = ($('#x-to') || {}).value || '9999'; const out = { exportedAt: new Date().toISOString(), range: [from, to], habits: live().map(h => ({ id: h.id, name: h.name, type: h.type, kind: h.kind, target: h.target, unit: h.unit, days: h.days })), log: Object.fromEntries(Object.entries(state.log).filter(([k]) => k >= from && k <= to)) }; const blob = new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'tally-export-' + today() + '.json'; a.click(); break; }
       case 'stat-sel': statsSel = statsSel.includes(id) ? statsSel.filter(x => x !== id) : [...statsSel, id]; render(); break;
       case 'toggle-s': S()[el.dataset.k] = !S()[el.dataset.k]; save(); render(); break;
       case 'clear-filters': Object.assign(S(), { hideDone: false, hideFailed: false, hideSkipped: false }); save(); render(); break;
-      case 'set-s': { const k = el.dataset.k; let v = el.dataset.v; if (k === 'dayStart' || k === 'weekStart') v = Number(v); S()[k] = v; save(); tap(); render(); break; }
-      case 'bg-random': S().bgStart = BG_SWATCHES[Math.floor(Math.random() * BG_SWATCHES.length)]; S().bgEnd = BG_SWATCHES[Math.floor(Math.random() * BG_SWATCHES.length)]; save(); render(); break;
+      case 'set-s': { const k = el.dataset.k; let v = el.dataset.v; if (k === 'dayStart' || k === 'weekStart') v = Number(v); S()[k] = v; save(); tap(); closeMenu(); render(); break; }
+      case 'bg-random': { const p = BG_PRESETS[Math.floor(Math.random() * BG_PRESETS.length)]; S().bgStart = p[0]; S().bgEnd = p[1]; save(); tap(); render(); break; }
       case 'tpl-kind': tplKind = el.dataset.v; tplQuery = ''; templatesSheet(); break;
       case 'tpl-custom': closeSheet(); draft = newDraft(el.dataset.kind === 'health' ? 'good' : el.dataset.kind); stack = [{ p: 'edit' }]; render('push'); setTimeout(() => { const n = $('#f-name'); if (n) n.focus(); }, 450); break;
       case 'tpl': { const [si, ti] = el.dataset.i.split(':').map(Number); fromTemplate(el.dataset.kind, T[el.dataset.kind].sections[si][1][ti]); break; }
@@ -1073,7 +1215,7 @@
       case 'month': { const [y, m] = statsMonth.split('-').map(Number); statsMonth = key(new Date(y, m - 1 + Number(el.dataset.n), 1)).slice(0, 7); render(); break; }
       case 'week': statsWeek = addDays(statsWeek, 7 * Number(el.dataset.n)); render(); break;
       case 'year': statsYear = String(Number(statsYear) + Number(el.dataset.n)); render(); break;
-      case 'export': { const blob = new Blob([JSON.stringify(state, null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'tally-' + today() + '.json'; a.click(); break; }
+      case 'export': push({ p: 'export' }); break;
       case 'import': { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/json'; inp.onchange = () => { const f = inp.files[0]; if (!f) return; f.text().then(txt => { try { const s = JSON.parse(txt); if (!s.habits || !s.log) throw 0; if (confirm('Replace all current data with this file?')) { localStorage.setItem(KEY, JSON.stringify(s)); state = load(); render(); } } catch (x) { alert('That is not a Tally export.'); } }); }; inp.click(); break; }
       case 'fresh': if (confirm('Fresh start: keep your habits, clear all history?')) { state.log = {}; state.status = {}; state.times = {}; state.notes = {}; state.timers = {}; save(); render(); } break;
       case 'wipe': if (confirm('Delete every habit and all history on this device?')) { const s = state.settings; localStorage.setItem(KEY, JSON.stringify({ habits: [], log: {}, timers: {}, settings: s })); state = load(); render(); } break;
@@ -1082,7 +1224,7 @@
   });
   document.addEventListener('change', e => {
     const el = e.target;
-    if (el.dataset.setS) { const k = el.dataset.setS; S()[k] = el.type === 'checkbox' ? el.checked : (k === 'dayStart' || k === 'weekStart' ? Number(el.value) : el.value); save(); render(); return; }
+    if (el.dataset.setS) { const k = el.dataset.setS; S()[k] = el.type === 'checkbox' ? el.checked : (k === 'dayStart' || k === 'weekStart' ? Number(el.value) : el.value); save(); tap(); if (k === 'customBg' || k === 'appearance') render(); else applyTheme(); return; }
     if (el.id === 'f-endon' || el.id === 'f-ron') { readDraft(); render(); return; }
     if (['f-start', 'f-end', 'f-r', 'f-goal', 'f-step', 'f-excl', 'f-everyn'].includes(el.id)) readDraft();
   });
