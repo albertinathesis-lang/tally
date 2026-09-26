@@ -138,6 +138,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const app = $('#app'), sheet = $('#sheet'), scrim = $('#scrim');
   let view = 'today', selected = today(), stack = [];         // stack: pushed pages over the tab
+  let statsAnim = false;
   let statsMonth = today().slice(0, 7), statsWeek = weekStartOf(today()), statsYear = today().slice(0, 4), statsRange = 28, statsSel = [];
   const emojiOf = h => `<span class="emoji">${h.emoji || EMOJI[h.icon] || '✅'}</span>`;
   const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
@@ -163,16 +164,18 @@
   // transition ends.
   function render(nav) {
     applyTheme(); closeMenu(); closePop();
+    if (inSheet() || (nav === 'pop' && sheet.querySelector('.spanes'))) { renderInSheet(nav); return; }
     const top = stack[stack.length - 1], isToday = !top && view === 'today';
     const rm = reduceMotion(), prev = cur;
     // pop with the page underneath still in the DOM: refresh it in place and slide the top one off
-    if (nav === 'pop' && prev && prev.isConnected && prev.previousElementSibling && prev.previousElementSibling.classList.contains('under')) {
+    if ((nav === 'pop' || nav === 'dismiss') && prev && prev.isConnected && prev.previousElementSibling && prev.previousElementSibling.classList.contains('under')) {
       const under = prev.previousElementSibling;
-      under.innerHTML = top ? renderPage(top) : VIEWS[view]();
-      under.className = 'layer under' + (isToday ? ' today' : '');
+      if (isToday && under.classList.contains('today')) { cur = under; under.classList.add('today-kept'); patchWeek(); const t = under.querySelector('.hdr__t'); if (t) t.innerHTML = titleHtml(); flipList(); }
+      else { under.innerHTML = top ? renderPage(top) : VIEWS[view](); }
+      under.className = 'layer under' + (isToday ? ' today' : '') + (under.classList.contains('today-kept') ? ' today-kept' : '');
       cur = under; under.style.pointerEvents = ''; prev.classList.add('out'); prev.style.pointerEvents = 'none';
       if (rm) { under.classList.remove('under'); prev.remove(); }
-      else { requestAnimationFrame(() => requestAnimationFrame(() => { under.classList.remove('under'); prev.classList.add('from-right'); })); setTimeout(() => prev.remove(), 420); }
+      else { requestAnimationFrame(() => requestAnimationFrame(() => { under.classList.remove('under'); prev.classList.add(nav === 'dismiss' ? 'to-bottom' : 'from-right'); })); setTimeout(() => prev.remove(), 460); }
       afterRender(under, top, isToday, nav); return;
     }
     const layer = document.createElement('div'); layer.className = 'layer' + (isToday ? ' today' : '');
@@ -181,8 +184,9 @@
     if (prev && prev.isConnected && nav && !rm) {
       prev.style.pointerEvents = 'none';
       if (nav === 'push') {
-        layer.classList.add('from-right'); app.appendChild(layer);
-        requestAnimationFrame(() => requestAnimationFrame(() => { layer.classList.remove('from-right'); prev.classList.add('under'); }));
+        const modal = top && top.modal && stack.length === 1;
+        layer.classList.add(modal ? 'from-bottom' : 'from-right'); app.appendChild(layer);
+        requestAnimationFrame(() => requestAnimationFrame(() => { layer.classList.remove('from-bottom', 'from-right'); prev.classList.add('under'); }));
       } else if (nav === 'pop') {
         prev.classList.add('out'); layer.classList.add('under'); app.insertBefore(layer, prev);
         requestAnimationFrame(() => requestAnimationFrame(() => { layer.classList.remove('under'); prev.classList.add('from-right'); }));
@@ -197,7 +201,7 @@
     afterRender(layer, top, isToday, nav, prev);
   }
   function afterRender(layer, top, isToday, nav, prev) {
-    if (isToday && (!prev || !prev.classList.contains('today') || nav)) { const l = layer.querySelector('.list'); if (l) { l.classList.add('enter'); [...l.children].forEach((c, i) => c.style.setProperty('--i', Math.min(i, 8))); } }
+    if (isToday && (!prev || !prev.classList.contains('today') || nav) && !layer.classList.contains('today-kept')) { const l = layer.querySelector('.list'); if (l) { l.classList.add('enter'); [...l.children].forEach((c, i) => c.style.setProperty('--i', Math.min(i, 8))); } }
     $('#tabbar').hidden = !!top; $('#navc').hidden = true;
     renderTabs(); renderNowBar();
     if (Object.keys(state.timers).length) ensureTick();
@@ -305,6 +309,9 @@
   const push = p => { stack.push(p); render('push'); };
   const pageT = (title, left, right) => `<div class="page-t glass">${left || `<button class="l circ" data-act="pop" aria-label="Back">${ic('chevron-left', 24)}</button>`}<span>${title}</span>${right || ''}</div>`;
   const todayTitle = () => { const t = today(); return selected === t ? 'Today' : selected === addDays(t, -1) ? 'Yesterday' : selected === addDays(t, 1) ? 'Tomorrow' : parse(selected).toLocaleDateString(undefined, { weekday: 'long' }); };
+  // perfect days in a row ending on the selected day (Grit's "Today 🔥 1")
+  function perfectStreak(k) { let n = 0; for (let i = 0; i < 4000; i++) { const p = dayProgress(k, live()); if (p == null || p < .999) break; n++; k = addDays(k, -1); } return n; }
+  const titleHtml = () => { const n = perfectStreak(selected); return `${todayTitle()}${n ? ` <span class="hdr__flame">${ic('flame', 15, 'fill-ico')} ${n}</span>` : ''}`; };
 
   // ---------- Habits screen ----------
   function weekStrip(start) {
@@ -318,7 +325,7 @@
   }
   function renderToday() {
     const s = S(), ws = weekStartOf(selected);
-    let html = `<div class="topblock"><div class="hdr"><div class="hdr__pill glass"><button data-act="menu-list" aria-label="Sort and filter">${ic('list', 24)}</button><button data-act="reorder" aria-label="Reorder">${ic('align-justify', 24)}</button></div><div class="hdr__t">${todayTitle()}</div><div class="hdr__r"><button class="circ tint glass" data-act="add" aria-label="New habit">${ic('plus', 26)}</button><button class="circ glass" data-act="search" aria-label="Search">${ic('search', 22)}</button></div></div>`;
+    let html = `<div class="topblock"><div class="hdr"><div class="hdr__pill glass"><button data-act="menu-list" aria-label="Sort and filter">${ic('list', 24)}</button><button data-act="reorder" aria-label="Reorder">${ic('align-justify', 24)}</button></div><div class="hdr__t">${titleHtml()}</div><div class="hdr__r"><button class="circ tint glass" data-act="add" aria-label="New habit">${ic('plus', 26)}</button>${live().length >= 4 ? `<button class="circ glass" data-act="search" aria-label="Search">${ic('search', 22)}</button>` : ''}</div></div>`;
     html += `<div class="week-wrap" id="weeks">${weekStrip(addDays(ws, -7))}${weekStrip(ws)}${weekStrip(addDays(ws, 7))}</div></div>`;
     return html + listHtml();
   }
@@ -368,7 +375,7 @@
     else if (pv === 'bars') chart = bars(h);
     else if (pv === 'line') chart = lineChart(h);
     const pp = h.type === 'check' || isDone ? 0 : (h.type === 'timer' && run ? Math.min(1, elapsedSec(h) / (target(h) * 60)) : ratio(h, k));
-    return `<section class="card${isDone ? ' is-done' : ''}${run ? ' is-run' : ''}${pv === 'off' ? ' pv-off' : ''}${pp > 0 ? ' is-partial' : ''}${pp >= .4 ? ' on-fill' : ''}" style="--c:${h.color}" id="card-${h.id}">${pp > 0 ? `<i class="card__fill" style="transform:scaleX(${pp.toFixed(3)})"></i>` : ''}${badge}
+    return `<section class="card${isDone ? ' is-done' : ''}${run ? ' is-run' : ''}${pv === 'off' ? ' pv-off' : ''}${pp > 0 ? ' is-partial' : ''}${pp >= .4 ? ' on-fill' : ''}${h.type === 'timer' ? ' is-timer' : ''}" style="--c:${h.color}" id="card-${h.id}">${pp > 0 ? `<i class="card__fill" style="transform:scaleX(${pp.toFixed(3)})"></i>` : ''}${badge}
       <div class="card__head"><button class="card__body" data-act="open" data-id="${h.id}" style="display:flex;align-items:center;gap:12px;flex:1;min-width:0"><span class="card__ico">${emojiOf(h)}</span><span class="card__txt"><div class="card__name">${esc(h.name)}</div><div class="card__sub" id="sub-${h.id}">${subtitle(h, k)}</div></span></button>${act}</div>
       ${chart ? `<button class="card__body" data-act="open" data-id="${h.id}">${chart}</button>` : ''}</section>`;
   }
@@ -480,7 +487,7 @@
     const s = S(), h24 = s.dayStart || 0, h12 = ((h24 + 11) % 12) + 1, pm = h24 >= 12, m = s.dayStartMin || 0;
     const col = (id, vals, cur, w) => `<div class="wcol" id="${id}" style="width:${w}px"><i></i><i></i>${vals.map(v => `<b class="${String(v) === String(cur) ? 'on' : ''}" data-v="${v}">${v}</b>`).join('')}<i></i><i></i></div>`;
     const r = anchor.getBoundingClientRect();
-    popEl = document.createElement('div'); popEl.className = 'pop glass'; popEl.style.transformOrigin = 'top right';
+    popEl = document.createElement('div'); popEl.className = 'popv glass'; popEl.style.transformOrigin = 'top right';
     popEl.innerHTML = `<div class="wheels"><i class="wsel"></i>${col('w-h', Array.from({ length: 12 }, (_, i) => i + 1), h12, 56)}${col('w-m', Array.from({ length: 60 }, (_, i) => pad(i)), pad(m), 64)}${col('w-ap', ['AM', 'PM'], pm ? 'PM' : 'AM', 64)}</div>`;
     popEl.style.top = (r.bottom + 4) + 'px'; popEl.style.left = Math.max(10, r.right - 214) + 'px';
     document.body.appendChild(popEl);
@@ -524,6 +531,8 @@
     requestAnimationFrame(() => sheet.classList.add('open'));
   }
   function closeSheet() {
+    if (inSheet()) { stack = []; draft = null; cur = app.querySelector('.layer:not(.out)'); }
+    sheet.classList.remove('paned');
     detailId = null; scrim.classList.remove('open'); scrim.style.opacity = '';
     sheet.classList.add('closing'); sheet.classList.remove('open', 'dragging'); sheet.style.transform = '';
     closeTimer = setTimeout(() => { sheet.innerHTML = ''; sheet.classList.remove('closing'); }, 320);
@@ -533,10 +542,10 @@
   // a flick or 120px lets go, otherwise it springs back
   (function sheetDrag() {
     let y0 = 0, t0 = 0, dy = 0, on = false;
-    sheet.addEventListener('touchstart', e => { if (on || e.touches.length > 1) return; if (sheet.scrollTop > 0) return; y0 = e.touches[0].clientY; t0 = Date.now(); dy = 0; on = true; }, { passive: true });
+    sheet.addEventListener('touchstart', e => { if (on || e.touches.length > 1) return; const sc = e.target.closest('.spane') || sheet; if (sc.scrollTop > 0) return; y0 = e.touches[0].clientY; t0 = Date.now(); dy = 0; on = true; }, { passive: true });
     sheet.addEventListener('touchmove', e => {
       if (!on) return; dy = e.touches[0].clientY - y0;
-      if (dy < 0) { dy = dy / 4; } else if (sheet.scrollTop > 0) { on = false; sheet.classList.remove('dragging'); sheet.style.transform = ''; return; }
+      if (dy < 0) { dy = dy / 4; } else if ((e.target.closest('.spane') || sheet).scrollTop > 0) { on = false; sheet.classList.remove('dragging'); sheet.style.transform = ''; return; }
       if (dy > 0 && e.cancelable) e.preventDefault();
       sheet.classList.add('dragging'); sheet.style.transform = `translateY(${dy}px)`;
       scrim.style.opacity = String(Math.max(0, 1 - dy / 500));
@@ -580,7 +589,40 @@
   function fromTemplate(kind, t) {          // t = [name, icon, type, target, unit, group]
     draft = newDraft(kind === 'health' ? 'good' : kind);
     Object.assign(draft, { name: t[0], icon: t[1], emoji: EMOJI[t[1]] || '✅', type: t[2] || 'check', target: t[3] || (t[2] === 'timer' ? 10 : 1), unit: t[2] === 'timer' ? 'Minutes' : (t[4] || 'Count') });
-    closeSheet(); stack = [{ p: 'edit' }]; render('push');
+    openEditFromSheet();
+  }
+  // Add Habit from the Templates sheet: the sheet slides left under the
+  // page (like a push inside the sheet); save drops the page away; back
+  // brings the sheet back
+  function openEditFromSheet() {
+    draft._fromSheet = true;
+    stack = [{ p: 'edit', modal: true }]; render('push');
+  }
+  // pages pushed inside the sheet (Grit's Templates → Add Habit → Color…):
+  // each is a pane sliding over the previous one; the sheet itself stays
+  const inSheet = () => stack.length && stack[stack.length - 1].modal;
+  function renderInSheet(nav) {
+    closeMenu(); closePop();
+    let host = sheet.querySelector('.spanes');
+    if (!host) { const first = document.createElement('div'); first.className = 'spane'; while (sheet.firstChild) first.appendChild(sheet.firstChild); host = document.createElement('div'); host.className = 'spanes'; host.appendChild(first); sheet.appendChild(host); sheet.classList.add('paned'); }
+    const panes = [...host.children], prev = panes[panes.length - 1], rm = reduceMotion();
+    if (nav === 'pop') {
+      const back = panes[panes.length - 2]; if (!back) return;
+      cur = back; back.classList.remove('under'); back.style.pointerEvents = '';
+      if (stack.length) back.innerHTML = renderPage(stack[stack.length - 1]);
+      prev.style.pointerEvents = 'none';
+      if (rm) prev.remove(); else { prev.classList.add('from-right'); setTimeout(() => prev.remove(), 420); }
+      if (!stack.length) { draft = null; sheet.classList.remove('paned'); const only = host.firstElementChild; setTimeout(() => { if (sheet.contains(host) && host.children.length === 1) { while (only.firstChild) sheet.appendChild(only.firstChild); host.remove(); cur = app.querySelector('.layer:not(.out)'); } }, 430); }
+      return;
+    }
+    const top = stack[stack.length - 1];
+    if (nav === 'push') {
+      const pane = document.createElement('div'); pane.className = 'spane from-right'; pane.innerHTML = renderPage(top); host.appendChild(pane); cur = pane;
+      prev.style.pointerEvents = 'none';
+      if (rm) { pane.classList.remove('from-right'); prev.classList.add('under'); }
+      else requestAnimationFrame(() => requestAnimationFrame(() => { pane.classList.remove('from-right'); prev.classList.add('under'); }));
+    } else { prev.innerHTML = renderPage(top); cur = prev; }
+    if (top.p === 'set-pv') pvPreviewInit(cur);
   }
 
   // ---------- Add / Edit habit (grouped-list pages) ----------
@@ -598,7 +640,7 @@
     switch (p.p) {
       case 'edit': {
         const isNew = d._new;
-        return pageT(isNew ? 'Add Habit' : 'Edit Habit', undefined, `<button class="r circ" style="background:${d.name ? 'var(--green)' : 'rgba(120,120,128,.25)'};color:#fff" data-act="save" aria-label="Save">${ic('check', 24)}</button>`) + `<div class="pg">
+        return pageT(isNew ? 'Add Habit' : 'Edit Habit', undefined, `<button class="r circ" style="background:${d.name ? d.color : 'rgba(120,120,128,.25)'};color:#fff" data-act="save" aria-label="Save">${ic('check', 24)}</button>`) + `<div class="pg">
           ${previewCard(d, true)}
           <p class="note" style="text-align:right;margin-top:6px" id="f-count">${d.name.length}/100</p>
           <h3>Appearance</h3><div class="grp">
@@ -713,7 +755,9 @@
     const i = state.habits.findIndex(x => x.id === d.id);
     delete d._new;
     if (i < 0) state.habits.push(d); else state.habits[i] = d;
-    save(); stack = []; draft = null; render();
+    const modal = stack[0] && stack[0].modal; save(); stack = []; draft = null;
+    if (modal) { closeSheet(); cur = app.querySelector('.layer:not(.out)'); if (onToday()) { patchWeek(); const t = cur.querySelector('.hdr__t'); if (t) t.innerHTML = titleHtml(); flipList(); } else render(); }
+    else render('pop');
   }
 
   // ---------- Statistics ----------
@@ -723,7 +767,7 @@
     const from = statsRange === 0 ? t : statsRange > 0 ? addDays(t, -(statsRange - 1)) : (all.map(h => h.startsOn || h.createdAt).sort()[0] || t);
     const rangeLabel = { 0: 'Today', 7: 'Last 7 Days', 28: 'Last 28 Days', 90: 'Last 3 Months', 180: 'Last 6 Months', 365: 'Last Year', '-1': 'All Time' }[statsRange];
     let html = `<div class="page-t glass"><span>Statistics</span><button class="range r glass" data-act="range-menu">${rangeLabel}</button></div><div class="stats">`;
-    html += `<h3>Habits <a data-act="none">Choose Habits</a></h3><div class="hchips">${all.map(h => `<button class="hchip${statsSel.includes(h.id) ? ' on' : ''}" style="--c:${h.color}" data-act="stat-sel" data-id="${h.id}"><span class="card__ico">${emojiOf(h)}</span><span>${esc(h.name)}</span></button>`).join('')}</div>`;
+    html += `<h3>Habits <a data-act="none">Choose Habits</a></h3><div class="hchips"><button class="hchip${statsSel.length ? '' : ' on'}" style="--c:var(--accent)" data-act="stat-all"><span class="hchip__ico">${ic('briefcase', 22)}</span><span>All Habits</span></button>${all.map(h => `<button class="hchip${statsSel.includes(h.id) ? ' on' : ''}" style="--c:${h.color}" data-act="stat-sel" data-id="${h.id}"><span class="hchip__ico">${emojiOf(h)}</span><span>${esc(h.name)}</span></button>`).join('')}</div><div class="sblocks${statsAnim ? ' enter' : ''}">`;
     const tot = totals(hs, from, t), pct = tot.sched ? Math.round(tot.comp / tot.sched * 100) : 0;
     html += `<h3>Completion</h3><div class="sblk"><span class="row__ico">${ic('chart-no-axes-column', 18)}</span><div style="flex:1"><b>${pct}%</b><small>${tot.comp} of ${tot.sched}</small><div class="sbar"><i style="width:${pct}%;background:var(--green)"></i><i style="flex:1;background:var(--orange)"></i></div><div class="legend"><span><i style="background:var(--green)"></i>${tot.comp} completed</span><span><i style="background:var(--orange)"></i>${tot.sched - tot.comp} not completed</span></div></div></div>`;
     const cur = hs.length ? Math.max(...hs.map(h => streak(h))) : 0, best = hs.length ? Math.max(...hs.map(bestStreak)) : 0;
@@ -741,11 +785,11 @@
     const gaps = []; let gs = null;
     for (let k = from; k <= t; k = addDays(k, 1)) { const sched = hs.some(h => scheduled(h, k)), anyDone = hs.some(h => done(h, k)); if (sched && !anyDone) { if (!gs) gs = k; } else if (gs) { gaps.push([gs, addDays(k, -1)]); gs = null; } }
     if (gs) gaps.push([gs, t]);
-    if (gaps.length) html += `<h3>Gaps this period</h3><div class="sblk" style="display:block">${gaps.slice(-5).map(([a1, b1]) => { const n = Math.round((parse(b1) - parse(a1)) / 864e5) + 1; return `<div class="gap"><span>${parse(a1).getDate()}–${parse(b1).getDate()} ${fmtDate(b1, { month: 'short' })}</span><i></i><span>${n} day${n === 1 ? '' : 's'}</span></div>`; }).join('')}</div>`;
+    if (gaps.length) html += `<h3>Gaps this period</h3><div class="sblk" style="display:block">${gaps.slice(-5).map(([a1, b1]) => { const n = Math.round((parse(b1) - parse(a1)) / 864e5) + 1; return `<div class="gap"><span>${a1 === b1 ? '' : parse(a1).getDate() + '–'}${parse(b1).getDate()} ${fmtDate(b1, { month: 'short' })}</span><i></i><span>${n} day${n === 1 ? '' : 's'}</span></div>`; }).join('')}</div>`;
     // month calendar
     const [y, mo] = statsMonth.split('-').map(Number), first = new Date(y, mo - 1, 1), start = weekStartOf(key(first));
     html += `<div class="sblk" style="display:block;padding:0;margin-top:18px"><div class="cal__t"><span>${first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span><span class="nav"><button data-act="month" data-n="-1">${ic('chevron-left', 22)}</button><button data-act="month" data-n="1">${ic('chevron-right', 22)}</button></span></div><div class="cal">${[0, 1, 2, 3, 4, 5, 6].map(i => `<div class="cal__h">${DAYS[(i + (S().weekStart === 1 ? 6 : 0)) % 7].toUpperCase()}</div>`).join('')}`;
-    for (let i = 0; i < 42; i++) { const k = addDays(start, i), inM = k.slice(0, 7) === statsMonth, p = k <= t ? dayProgress(k, hs) : null; html += `<div class="cal__d${inM ? '' : ' out'}${p != null && p >= .999 ? ' on' : p ? ' p' : ''}" style="--p:${(p || 0).toFixed(2)}"><span>${parse(k).getDate()}</span></div>`; }
+    for (let i = 0; i < 42; i++) { const k = addDays(start, i), inM = k.slice(0, 7) === statsMonth, p = k <= t ? dayProgress(k, hs) : null; html += `<div class="cal__d${inM ? '' : ' out'}${p != null && p >= .999 ? ' on' : p ? ' p' : ''}${k === t ? ' today' : ''}" style="--p:${(p || 0).toFixed(2)}"><span>${parse(k).getDate()}</span></div>`; }
     html += '</div></div>';
     // week table
     const wk = statsWeek, wtot = totals(hs, wk, addDays(wk, 6));
@@ -754,12 +798,13 @@
     html += '</div></div>';
     // year grid
     const yStart = weekStartOf(statsYear + '-01-01'); let cells = '';
-    for (let c = 0; c < 53; c++) for (let r = 0; r < 7; r++) { const k = addDays(yStart, c * 7 + r); cells += k.slice(0, 4) !== statsYear || k > t ? '<i class="n"></i>' : hs.some(h => done(h, k)) ? '<i class="d"></i>' : '<i></i>'; }
+    for (let c = 0; c < 53; c++) for (let r = 0; r < 7; r++) { const k = addDays(yStart, c * 7 + r); cells += k.slice(0, 4) !== statsYear || k > t ? '<i class="n"></i>' : k === t ? '<i class="t"></i>' : hs.some(h => done(h, k)) ? '<i class="d"></i>' : '<i></i>'; }
     html += `<div class="sblk" style="display:block;margin-top:18px"><div class="cal__t" style="padding:0 0 6px"><span>${statsYear}</span><span class="nav"><button data-act="year" data-n="-1">${ic('chevron-left', 22)}</button><button data-act="year" data-n="1">${ic('chevron-right', 22)}</button></span></div><div style="display:flex;gap:6px"><div style="display:flex;flex-direction:column;justify-content:space-between;font-size:9px;color:var(--ink-3);padding:6px 0"><span>M</span><span>T</span><span>S</span></div><div style="overflow:hidden"><div class="year">${cells}</div></div></div><div class="axis">${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov'].map(x => `<span>${x}</span>`).join('')}</div></div>`;
     html += `<h3>Progress</h3><div class="sblk" style="display:block">${progressChart(hs, from, t)}</div>`;
     if (hs.length > 1) html += `<h3>Comparison</h3><div class="sblk" style="display:block">${comparisonChart(hs, from, t)}<div class="legend">${hs.map(h => `<span><i style="background:${h.color}"></i>${h.emoji} ${esc(h.name)}</span>`).join('')}</div></div>`;
     html += `<h3>Performance</h3><div class="sblk" style="display:block">${hs.map(h => { const tt = totals([h], from, t), p = tt.sched ? Math.round(tt.comp / tt.sched * 100) : 0; return `<div class="perf"><span class="card__ico" style="width:24px;height:24px;font-size:18px">${emojiOf(h)}</span><span>${esc(h.name)}<small style="display:block;font-size:12px;color:var(--ink-3)">${tt.comp} of ${tt.sched}</small></span><span class="pill${p < 50 ? ' bad' : ''}">${p}%</span></div>`; }).join('') || '<p class="note">No habits yet.</p>'}</div>`;
-    html += `<div style="height:40px"></div></div>`;
+    html += `</div><div style="height:40px"></div></div>`;
+    statsAnim = false;
     return html;
   }
   function series(hs, from, to) { const pts = []; let sched = 0, comp = 0; for (let k = from; k <= to; k = addDays(k, 1)) { hs.forEach(h => { if (scheduled(h, k)) { sched++; if (done(h, k)) comp++; } }); pts.push([k, sched ? comp / sched : 0]); } return pts; }
@@ -893,20 +938,33 @@
   function renderNowBar() {
     const ids = Object.keys(state.timers), bar = $('#nowbar');
     bar.hidden = !ids.length; if (!ids.length) return;
-    bar.innerHTML = ids.map(id => { const h = state.habits.find(x => x.id === id); if (!h) return ''; return `<div class="now"><span class="card__ico">${emojiOf(h)}</span><span class="now__b"><span class="now__t">${esc(h.name)}</span><span class="now__m">Every day, ${target(h)} minutes</span></span><b class="now__time" id="nb-${id}">${fmtClock(elapsedSec(h))}</b><button class="now__stop" data-act="timer" data-id="${id}" aria-label="Stop">${ic('square', 14)}</button></div>`; }).join('');
+    bar.innerHTML = ids.map(id => { const h = state.habits.find(x => x.id === id); if (!h) return ''; return `<div class="now" style="--c:${h.color}"><span class="card__ico">${emojiOf(h)}</span><span class="now__b"><span class="now__t">${esc(h.name)}</span><span class="now__m">Every day, ${target(h)} minutes</span></span><b class="now__time" id="nb-${id}">${fmtClock(elapsedSec(h))}</b><button class="now__stop" data-act="timer" data-id="${id}" aria-label="Stop">${ic('square', 14)}</button></div>`; }).join('');
   }
   function celebrate(h) {
     if (NATIVE && NATIVE.success) NATIVE.success();
     completionSound();
-    if (S().confetti) confetti(h.color);
+    if (S().confetti) confetti(h.color, cur && cur.querySelector('#card-' + h.id));
     const best = bestStreak(h), hit = STREAKS.includes(best) && streak(h) === best ? best : 0;
     if (hit && S().badges) setTimeout(() => openSheet(`<div class="sheet__hdr"><button class="circ glass" data-act="close" aria-label="Close">${ic('x', 24)}</button><span class="sheet__title">New Achievement!</span><span style="width:44px"></span></div><div class="det" style="padding-bottom:20px"><span class="hex on" style="--v:#32ade6;display:inline-grid;width:110px;height:122px">${ic('flame', 50)}</span><div style="font-size:24px;font-weight:700;margin-top:12px">${hit} days</div><p class="note" style="text-align:center">Congratulations! Keep up the amazing work!</p><button class="btn accent" style="width:100%;margin-top:14px" data-act="go-ach">View all achievements</button></div>`), 500);
   }
-  function confetti(color) {
+  // confetti: a burst of shapes from the card that was completed, thrown
+  // outward, falling under gravity and fading (Grit's completion burst)
+  function confetti(color, from) {
     const c = document.createElement('div'); c.className = 'confetti';
-    const cols = [color, '#ffcc00', '#ff2d55', '#5e5ce6', '#34c759', '#32ade6'];
-    for (let i = 0; i < 60; i++) { const p = document.createElement('i'); p.style.left = Math.random() * 100 + '%'; p.style.background = cols[i % cols.length]; p.style.animationDelay = (Math.random() * .4) + 's'; p.style.animationDuration = (1.2 + Math.random() * .8) + 's'; p.style.transform = `rotate(${Math.random() * 360}deg)`; c.appendChild(p); }
-    document.body.appendChild(c); setTimeout(() => c.remove(), 2400);
+    const cols = ['#ff3b30', '#34c759', '#3478f6', '#ffcc00', '#af52de', '#ff9500', '#5e5ce6', '#32ade6'];
+    const r = from ? from.getBoundingClientRect() : { left: 0, top: window.innerHeight * .35, width: window.innerWidth, height: 60 };
+    const shapes = ['tri', 'circ', 'sq', 'dot', 'pill'];
+    for (let i = 0; i < 90; i++) {
+      const p = document.createElement('i'); p.className = shapes[i % shapes.length];
+      const x0 = r.left + Math.random() * r.width, y0 = r.top + r.height / 2;
+      const ang = -Math.PI / 2 + (Math.random() - .5) * Math.PI * 1.1, v = 260 + Math.random() * 520;
+      const dx = Math.cos(ang) * v, dy = Math.sin(ang) * v;
+      p.style.left = x0 + 'px'; p.style.top = y0 + 'px'; p.style.color = cols[i % cols.length];
+      p.style.setProperty('--dx', dx.toFixed(0) + 'px'); p.style.setProperty('--dy', dy.toFixed(0) + 'px'); p.style.setProperty('--r', (Math.random() * 1080 - 540).toFixed(0) + 'deg');
+      p.style.animationDuration = (2.2 + Math.random() * .9) + 's'; p.style.animationDelay = (Math.random() * .12) + 's';
+      c.appendChild(p);
+    }
+    document.body.appendChild(c); setTimeout(() => c.remove(), 3400);
   }
   // sounds: a chime on completion (a few variants)
   let actx = null;
@@ -1070,7 +1128,7 @@
       else if (sel && svg) { const pp = svg.querySelector('.p'), len = parseFloat(pp.getAttribute('stroke-dasharray')); pp.setAttribute('stroke-dashoffset', (len * (1 - (p || 0))).toFixed(2)); }
       else if ((!sel || !p) && svg) svg.remove();
     });
-    const title = cur.querySelector('.hdr__t'); if (title && title.textContent !== todayTitle()) { title.classList.add('swap'); setTimeout(() => { title.textContent = todayTitle(); title.classList.remove('swap'); }, 120); }
+    const title = cur.querySelector('.hdr__t'); if (title && title.innerHTML !== titleHtml()) { title.classList.add('swap'); setTimeout(() => { title.innerHTML = titleHtml(); title.classList.remove('swap'); }, 120); }
   }
   // the list: cards that changed place glide there (FLIP), new ones fade in
   function flipList() {
@@ -1108,9 +1166,9 @@
     const item = (act, icon, label, cls = '') => `<button class="ci ${cls}" data-act="${act}" data-id="${h.id}">${ic(icon, 22)}<span>${label}</span></button>`;
     const el = document.createElement('div'); el.className = 'ctx'; ctxEl = el;
     el.innerHTML = `<div class="ctx__scrim" data-act="ctx-close"></div><div class="ctx__panel glass" style="--c:${h.color}"><div class="ctx__cap">${todayTitle()}</div><div class="ctx__grid">
-      ${item('skip', 'fast-forward', skipped(h, selected) ? 'Unskip' : 'Skip')}${item('fail', 'x', failed(h, selected) ? 'Unfail' : 'Fail')}${item(done(h, selected) ? 'undo' : 'complete', 'check', done(h, selected) ? 'Undo' : 'Complete')}
-      ${item('duplicate', 'copy', 'Duplicate')}${item('note', 'notebook-pen', 'Add Note')}${item('reset', 'eraser', 'Reset History')}
-      ${item('edit', 'pen-line', 'Edit')}${item('archive', 'archive', h.archived ? 'Restore' : 'Archive')}${item('delete', 'trash-2', 'Delete', 'danger')}</div>
+      ${item('skip', 'fast-forward', skipped(h, selected) ? 'Unskip' : 'Skip')}${item('fail', 'x', failed(h, selected) ? 'Unfail' : 'Fail')}${item('undo', 'rotate-ccw', 'Reset')}
+      ${item(done(h, selected) ? 'undo' : 'complete', 'check', done(h, selected) ? 'Undo' : 'Complete')}${item('duplicate', 'copy', 'Duplicate')}${item('note', 'notebook-pen', 'Add Note')}
+      ${item('reset', 'eraser', 'Reset His&shy;tory')}${item('edit', 'pen-line', 'Edit')}${item('archive', 'archive', h.archived ? 'Restore' : 'Archive')}</div><div class="ctx__grid one">${item('delete', 'trash-2', 'Delete', 'danger')}</div>
       <button class="ctx__row" data-act="stats-of" data-id="${h.id}">${ic('chart-line', 20)}<span>Statistics</span></button>
       <button class="ctx__row" data-act="open" data-id="${h.id}">${ic('ellipsis', 20)}<span>More</span>${ic('chevron-right', 16)}</button></div>`;
     document.body.appendChild(el);
@@ -1151,8 +1209,8 @@
       case 'duplicate': { const c = JSON.parse(JSON.stringify(h)); c.id = uid(); c.name = h.name + ' copy'; c.createdAt = today(); c.startsOn = today(); state.habits.splice(state.habits.indexOf(h) + 1, 0, c); save(); if (onToday()) flipList(); else render(); break; }
       case 'reset': if (confirm('Reset all history for ' + h.name + '?')) { Object.keys(state.log).forEach(k => { delete state.log[k][id]; if (!Object.keys(state.log[k]).length) delete state.log[k]; }); Object.keys(state.status).forEach(k => { delete state.status[k][id]; }); save(); afterChange(h); } break;
       case 'stats-of': statsSel = [id]; view = 'stats'; stack = []; render('fade'); break;
-      case 'pop': readDraft(); stack.pop(); if (!stack.length) draft = null; render('pop'); break;
-      case 'go': readDraft(); push({ p: el.dataset.p }); break;
+      case 'pop': { readDraft(); const was = stack.pop(); if (was && was.modal) { renderInSheet('pop'); break; } if (!stack.length) draft = null; render('pop'); break; }
+      case 'go': readDraft(); push({ p: el.dataset.p, modal: inSheet() }); break;
       case 'add': tplKind = 'good'; tplQuery = ''; templatesSheet(); break;
       case 'search': push({ p: 'search' }); break;
       case 'reorder': push({ p: 'reorder' }); break;
@@ -1174,13 +1232,14 @@
       case 'copy-id': try { navigator.clipboard.writeText(uidOf()); tap(); } catch (x) {} break;
       case 'reset-ach': if (confirm('Reset earned achievements?')) { state.achReset = today(); save(); render(); } break;
       case 'export-go': { const from = ($('#x-from') || {}).value || '0000', to = ($('#x-to') || {}).value || '9999'; const out = { exportedAt: new Date().toISOString(), range: [from, to], habits: live().map(h => ({ id: h.id, name: h.name, type: h.type, kind: h.kind, target: h.target, unit: h.unit, days: h.days })), log: Object.fromEntries(Object.entries(state.log).filter(([k]) => k >= from && k <= to)) }; const blob = new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'tally-export-' + today() + '.json'; a.click(); break; }
-      case 'stat-sel': statsSel = statsSel.includes(id) ? statsSel.filter(x => x !== id) : [...statsSel, id]; render(); break;
+      case 'stat-sel': statsSel = statsSel.includes(id) ? statsSel.filter(x => x !== id) : [...statsSel, id]; statsAnim = true; tap(); render(); break;
+      case 'stat-all': statsSel = []; statsAnim = true; tap(); render(); break;
       case 'toggle-s': S()[el.dataset.k] = !S()[el.dataset.k]; save(); render(); break;
       case 'clear-filters': Object.assign(S(), { hideDone: false, hideFailed: false, hideSkipped: false }); save(); render(); break;
       case 'set-s': { const k = el.dataset.k; let v = el.dataset.v; if (k === 'dayStart' || k === 'weekStart') v = Number(v); S()[k] = v; save(); tap(); closeMenu(); render(); break; }
       case 'bg-random': { const p = BG_PRESETS[Math.floor(Math.random() * BG_PRESETS.length)]; S().bgStart = p[0]; S().bgEnd = p[1]; save(); tap(); render(); break; }
       case 'tpl-kind': tplKind = el.dataset.v; tplQuery = ''; templatesSheet(); break;
-      case 'tpl-custom': closeSheet(); draft = newDraft(el.dataset.kind === 'health' ? 'good' : el.dataset.kind); stack = [{ p: 'edit' }]; render('push'); setTimeout(() => { const n = $('#f-name'); if (n) n.focus(); }, 450); break;
+      case 'tpl-custom': draft = newDraft(el.dataset.kind === 'health' ? 'good' : el.dataset.kind); openEditFromSheet(); setTimeout(() => { const n = $('#f-name'); if (n) n.focus(); }, 450); break;
       case 'tpl': { const [si, ti] = el.dataset.i.split(':').map(Number); fromTemplate(el.dataset.kind, T[el.dataset.kind].sections[si][1][ti]); break; }
       case 'open': detailSheet(id); break;
       case 'open-day': stack = []; view = 'today'; render(); detailSheet(id); break;
@@ -1209,7 +1268,7 @@
       case 'skip': setStatus(h, selected, skipped(h, selected) ? '' : 'skip'); tap(); closeSheet(); afterChange(h); break;
       case 'fail': setStatus(h, selected, failed(h, selected) ? '' : 'fail'); tap(); closeSheet(); afterChange(h); break;
       case 'timer': if (running(h)) stopTimer(h); else if (!done(h, today())) { if (selected !== today()) { selected = today(); render(); } startTimer(h); } refreshDetail(); break;
-      case 'archive': closeMenu(); closeSheet(); h.archived = !h.archived; save(); stack = []; draft = null; render(); break;
+      case 'archive': closeMenu(); { const m = inSheet(); closeSheet(); h.archived = !h.archived; save(); stack = []; draft = null; if (m && onToday()) flipList(); else render(); } break;
       case 'delete': closeMenu(); if (confirm('Delete this habit and all its history?')) { state.habits = state.habits.filter(y => y.id !== id); Object.keys(state.log).forEach(k => { delete state.log[k][id]; }); save(); closeSheet(); stack = []; draft = null; render(); } break;
       case 'go-ach': closeSheet(); view = 'settings'; stack = [{ p: 'achievements' }]; render(); break;
       case 'month': { const [y, m] = statsMonth.split('-').map(Number); statsMonth = key(new Date(y, m - 1 + Number(el.dataset.n), 1)).slice(0, 7); render(); break; }
@@ -1231,7 +1290,7 @@
   let qTimer = null;
   document.addEventListener('input', e => {
     if (e.target.id === 'tpl-q') { clearTimeout(qTimer); const v = e.target.value; qTimer = setTimeout(() => { tplQuery = v; templatesSheet(); }, 250); }
-    if (e.target.id === 'f-name' && draft) { draft.name = e.target.value.slice(0, 100); const b = document.querySelector('.page-t .r'); if (b) b.style.background = draft.name ? 'var(--green)' : 'rgba(120,120,128,.25)'; const n = $('#f-count'); if (n) n.textContent = draft.name.length + '/100'; }
+    if (e.target.id === 'f-name' && draft) { draft.name = e.target.value.slice(0, 100); const b = document.querySelector('.page-t .r'); if (b) b.style.background = draft.name ? draft.color : 'rgba(120,120,128,.25)'; const n = $('#f-count'); if (n) n.textContent = draft.name.length + '/100'; }
     if (e.target.id === 'hsearch') { const q = e.target.value.toLowerCase(); document.querySelectorAll('#hsearch-out .row').forEach(r => { r.hidden = q && !r.textContent.toLowerCase().includes(q); }); }
   });
 

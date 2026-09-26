@@ -1,1 +1,4 @@
 .DS_Store
+grit/*.mp4
+grit/frames*/
+grit/ref3/
