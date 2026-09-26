@@ -1047,7 +1047,7 @@
     const tmp = document.createElement('div'); tmp.innerHTML = habitCard(h); const fresh = tmp.firstElementChild;
     ['is-done', 'is-run', 'pv-off', 'is-partial', 'on-fill'].forEach(c => el.classList.toggle(c, fresh.classList.contains(c)));
     const of = el.querySelector('.card__fill'), nf = fresh.querySelector('.card__fill');
-    if (of && nf) of.style.transform = nf.style.transform; else if (nf && !of) { nf.style.transform = 'scaleX(0)'; el.prepend(nf); requestAnimationFrame(() => requestAnimationFrame(() => { nf.style.transform = fresh.querySelector('.card__fill').style.transform; })); } else if (of && !nf) of.remove();
+    if (of && nf) of.style.transform = nf.style.transform; else if (nf && !of) { const tf = nf.style.transform; nf.style.transform = 'scaleX(0)'; el.prepend(nf); requestAnimationFrame(() => requestAnimationFrame(() => { nf.style.transform = tf; })); } else if (of && !nf) of.remove();
     const oldAct = el.querySelector('.card__act'), newAct = fresh.querySelector('.card__act');
     if (oldAct && newAct && oldAct.innerHTML !== newAct.innerHTML) { oldAct.replaceWith(newAct); newAct.classList.add('pop'); }
     const sub = el.querySelector('#sub-' + h.id); if (sub) sub.textContent = subtitle(h, selected);
